@@ -1,7 +1,22 @@
+buildscript {
+    dependencies {
+        classpath 'org.flywaydb:flyway-mysql:11.14.0'
+    }
+}
+
 plugins {
     id 'java'
     id 'org.springframework.boot' version '3.4.10' // 기존 API 서버와 동일하게 변경
     id 'io.spring.dependency-management' version '1.1.7'
+    id 'org.flywaydb.flyway' version '11.14.0'
+}
+
+flyway {
+    configFiles = ["$rootDir/conf/flyway.conf"]
+    locations = ['filesystem:src/main/resources/db/migration']
+    baselineOnMigrate = true
+    baselineVersion = 1
+    cleanDisabled = true
 }
 
 group = 'com.couponpop'
@@ -48,6 +63,9 @@ dependencies {
     runtimeOnly 'com.mysql:mysql-connector-j'
     runtimeOnly 'com.h2database:h2'
 
+    // [Flyway]
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-mysql'
 
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
