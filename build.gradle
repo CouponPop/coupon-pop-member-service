@@ -6,7 +6,7 @@ plugins {
 
 group = 'com.couponpop'
 version = '0.0.1-SNAPSHOT'
-description = 'couponpop-member'
+description = 'Member Service for CouponPop MSA'
 
 java {
     toolchain {
