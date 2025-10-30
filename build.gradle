@@ -1,6 +1,6 @@
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.5.7'
+    id 'org.springframework.boot' version '3.4.10' // 기존 API 서버와 동일하게 변경
     id 'io.spring.dependency-management' version '1.1.7'
 }
 
@@ -21,22 +21,42 @@ configurations {
 }
 
 repositories {
+    mavenLocal() // 로컬 배포로 먼저 테스트
     mavenCentral()
+//    maven {
+//        url = uri("https://maven.pkg.github.com/CouponPop/coupon-pop-security-module")
+//        credentials {
+//            username = System.getenv("GITHUB_ACTOR")
+//            password = System.getenv("GITHUB_TOKEN")
+//        }
+//    }
 }
 
 dependencies {
+    // [Spring Boot Starter]
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-web'
-    compileOnly 'org.projectlombok:lombok'
-    developmentOnly 'org.springframework.boot:spring-boot-devtools'
-    runtimeOnly 'com.h2database:h2'
+
+    // [CouponPop Security Module]
+    implementation 'com.couponpop:couponpop-security:1.0.0-SNAPSHOT'
+
+    // [DB]
     runtimeOnly 'com.mysql:mysql-connector-j'
+    runtimeOnly 'com.h2database:h2'
+
+
+    developmentOnly 'org.springframework.boot:spring-boot-devtools'
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+
+    compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
+    testCompileOnly 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
