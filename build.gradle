@@ -19,6 +19,30 @@ flyway {
     cleanDisabled = true
 }
 
+def loadGithubCredentials() {
+    def credentials = [:]
+    def envFile = file('.env')
+    def foundKeys = 0
+
+    if (envFile.exists()) {
+        envFile.eachLine { line ->
+            if (foundKeys == 2) return // 두 키 다 찾으면 조기 종료
+            if (!line.startsWith('#') && line.contains('=')) {
+                def (key, value) = line.split('=', 2)*.trim()
+                if (key in ['GITHUB_ACTOR', 'GITHUB_TOKEN']) {
+                    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+                        value = value.substring(1, value.length() - 1)
+                    }
+                    credentials[key] = value
+                    foundKeys++ //
+                }
+            }
+        }
+    }
+
+    return credentials
+}
+
 group = 'com.couponpop'
 version = '0.0.1-SNAPSHOT'
 description = 'Member Service for CouponPop MSA'
@@ -36,18 +60,19 @@ configurations {
 }
 
 repositories {
-    mavenLocal() // 로컬 배포로 먼저 테스트
     mavenCentral()
-//    maven {
-//        url = uri("https://maven.pkg.github.com/CouponPop/coupon-pop-security-module")
-//        credentials {
-//            username = System.getenv("GITHUB_ACTOR")
-//            password = System.getenv("GITHUB_TOKEN")
-//        }
-//    }
+    maven {
+        url = uri("https://maven.pkg.github.com/CouponPop/coupon-pop-security-module")
+        credentials {
+            def githubCredentials = loadGithubCredentials()
+            username = githubCredentials.GITHUB_ACTOR ?: System.getenv("GITHUB_ACTOR") ?: "unknown"
+            password = githubCredentials.GITHUB_TOKEN ?: System.getenv("GITHUB_TOKEN") ?: "unknown"
+        }
+    }
 }
 
 dependencies {
+
     // [Spring Boot Starter]
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
@@ -57,7 +82,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
 
     // [CouponPop Security Module]
-    implementation 'com.couponpop:couponpop-security:1.0.0-SNAPSHOT'
+    implementation 'com.couponpop:couponpop-security:0.0.1-SNAPSHOT'
 
     // [DB]
     runtimeOnly 'com.mysql:mysql-connector-j'
