@@ -59,7 +59,7 @@ class MemberControllerTest {
     @BeforeEach
     void setUp() {
         SecurityContext context = SecurityContextHolder.createEmptyContext();
-        AuthMember authMember = AuthMember.from(1L, "테스트이름", MemberType.CUSTOMER.name());
+        AuthMember authMember = AuthMember.of(1L, "테스트이름", MemberType.CUSTOMER.name());
         Authentication authenticationToken = new JwtAuthenticationToken(authMember);
         context.setAuthentication(authenticationToken);
         SecurityContextHolder.setContext(context);
@@ -135,7 +135,7 @@ class MemberControllerTest {
 
         given(memberService.updateMemberProfile(Mockito.eq(1L), Mockito.any())).willReturn(response);
 
-        AuthMember authMember = AuthMember.from(1L, "테스트이름", MemberType.CUSTOMER.name());
+        AuthMember authMember = AuthMember.of(1L, "테스트이름", MemberType.CUSTOMER.name());
         Authentication authentication = new JwtAuthenticationToken(authMember);
 
         // when & then
@@ -196,7 +196,7 @@ class MemberControllerTest {
 
         willThrow(new GlobalException(AuthErrorCode.PASSWORDS_NOT_MATCH)).given(memberService).updateMemberProfile(Mockito.eq(1L), Mockito.any());
 
-        AuthMember authMember = AuthMember.from(1L, "테스트이름", MemberType.CUSTOMER.name());
+        AuthMember authMember = AuthMember.of(1L, "테스트이름", MemberType.CUSTOMER.name());
         Authentication authentication = new JwtAuthenticationToken(authMember);
 
         // when & then

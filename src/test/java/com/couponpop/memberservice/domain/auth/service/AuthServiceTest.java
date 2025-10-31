@@ -70,7 +70,7 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        testAuthMember = AuthMember.from(1L, "테스트이름", MemberType.CUSTOMER.name());
+        testAuthMember = AuthMember.of(1L, "테스트이름", MemberType.CUSTOMER.name());
         testAuthorizationHeader = "Bearer " + "testAccessToken";
         testLogoutRequest = new LogoutRequest("testFcmToken");
         testToken = "testAccessToken";
