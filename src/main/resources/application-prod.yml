@@ -1,0 +1,23 @@
+server:
+  port: 8080 # ECS Fargate 컨테이너는 8080 포트를 노출
+
+spring:
+  application:
+    name: member-service
+
+  # AWS Parameter Store에서 설정을 가져오도록 Spring Cloud AWS Config 설정
+  config:
+    import: optional:aws-parameterstore:/couponpop/prod/member-service/
+
+cloud:
+  aws:
+    region:
+      static: ap-northeast-2
+    stack:
+      auto: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health # prod 환경에서는 health만 노출

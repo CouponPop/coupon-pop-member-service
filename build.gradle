@@ -71,6 +71,12 @@ repositories {
     }
 }
 
+dependencyManagement {
+    imports {
+        mavenBom "io.awspring.cloud:spring-cloud-aws-dependencies:3.1.1"
+    }
+}
+
 dependencies {
 
     // [Spring Boot Starter]
@@ -94,6 +100,9 @@ dependencies {
 
     // [Rest Docs]
     testImplementation 'org.springframework.restdocs:spring-restdocs-mockmvc'
+
+    // [AWS]
+    implementation 'io.awspring.cloud:spring-cloud-aws-starter-parameter-store'
 
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
