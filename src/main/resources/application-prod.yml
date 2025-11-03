@@ -7,8 +7,14 @@ spring:
 
   # AWS Parameter Store에서 설정을 가져오도록 Spring Cloud AWS Config 설정
   config:
-    import: "aws-parameterstore:/couponpop/prod/member-service/"
+    import: optional:aws-parameterstore:/couponpop/prod/member-service/
 
+cloud:
+  aws:
+    region:
+      static: ap-northeast-2
+    stack:
+      auto: false
 
 management:
   endpoints:
