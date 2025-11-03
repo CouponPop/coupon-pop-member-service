@@ -1,0 +1,166 @@
+// Jenkinsfile (모든 서비스 레포지토리의 루트에 위치)
+
+pipeline {
+    agent any // Jenkins 마스터 또는 에이전트에서 실행
+
+    // Jenkins Global Tool Configuration에서 설정한 이름
+    tools {
+        jdk 'corretto-17'
+        gradle 'gradle-8.14.3'
+    }
+
+    // 환경 변수 정의
+    environment {
+        // --- 서비스별 수정 필요 ---
+        SERVICE_NAME                = 'member-service' // 🚨 예: 'api-gateway', 'coupon-service'
+        SONAR_PROJECT_KEY           = "couponpop-${SERVICE_NAME}"
+
+        // --- 공통 (Jenkins EC2 IAM 역할이 권한을 가짐) ---
+        AWS_REGION                  = 'ap-northeast-2'
+        AWS_ACCOUNT_ID              = '802318301972' // 🚨 본인 AWS 계정 ID로 변경
+        ECR_REGISTRY                = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+        ECR_REPO_NAME               = "couponpop/${SERVICE_NAME}"
+        ECS_CLUSTER_NAME            = 'couponpop-ecs-cluster'
+        ECS_SERVICE_NAME            = "${SERVICE_NAME}" // 🚨 ECS 서비스 이름 확인
+        ECS_TASK_DEFINITION_FAMILY  = "couponpop-${SERVICE_NAME}-task-definition" // 🚨 Task Def Family 확인
+        SONAR_HOST_URL              = 'http://sonarqube:9000' // 🚨 Jenkins 시스템 설정과 일치
+
+        // --- Jenkins Credentials ID ---
+        GPR_CREDENTIALS_ID          = 'github-packages-token' // GitHub Packages 읽기용 PAT
+        FCM_KEY_CREDENTIALS_ID      = 'fcm-service-account-key' // FCM 키 파일
+        SONAR_TOKEN_CREDENTIALS_ID  = 'sonarqube-token' // SonarQube 토큰
+    }
+
+    stages {
+        // === 1. Checkout ===
+        stage('Checkout') {
+            steps {
+                // Multibranch Pipeline이 자동으로 코드를 checkout 해줍니다.
+                // 수동으로 checkout 할 경우:
+                // checkout scm
+                script {
+                    // PULL_REQUEST인 경우 PR 관련 변수 설정 (SonarQube 분석용)
+                    if (env.CHANGE_ID) {
+                        env.PR_ID = env.CHANGE_ID
+                        env.PR_BRANCH = env.CHANGE_BRANCH
+                        env.PR_TARGET = env.CHANGE_TARGET
+                    }
+                }
+            }
+        }
+
+        // === 2. Prepare Test Environment ===
+        stage('Prepare Test Env') {
+            steps {
+                withCredentials([file(credentialsId: FCM_KEY_CREDENTIALS_ID, variable: 'FCM_KEY_FILE')]) {
+                    sh 'mkdir -p src/main/resources/firebase'
+                    sh 'cp $FCM_KEY_FILE src/main/resources/firebase/serviceAccountKey.json'
+                }
+            }
+        }
+
+        // === 3. Build & Test (모든 브랜치에서 실행) ===
+        stage('Build & Test') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: GPR_CREDENTIALS_ID, usernameVariable: 'GITHUB_ACTOR', passwordVariable: 'GITHUB_TOKEN')]) {
+                    sh 'chmod +x ./gradlew'
+                    sh """
+                    export GITHUB_ACTOR=${GITHUB_ACTOR}
+                    export GITHUB_TOKEN=${GITHUB_TOKEN}
+                    SPRING_PROFILES_ACTIVE=test \
+                    TZ=Asia/Seoul \
+                    ./gradlew clean build --no-daemon
+                    """
+                    // GHA와 달리 Jenkins는 localhost에서 Redis, Elasticsearch를 자동 실행하지 않습니다.
+                    // 이 테스트가 성공하려면 Jenkins 실행 환경에 Redis/Elasticsearch가 있거나,
+                    // Testcontainers를 사용하도록 build.gradle이 설정되어야 합니다.
+                }
+            }
+        }
+
+        // === 4. SonarQube Analysis (모든 브랜치에서 실행) ===
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('SonarQube') {
+                    withCredentials([string(credentialsId: SONAR_TOKEN_CREDENTIALS_ID, variable: 'SONAR_TOKEN')]) {
+                        sh """
+                        ./gradlew sonarqube \
+                        -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                        -Dsonar.projectName=${SONAR_PROJECT_KEY} \
+                        -Dsonar.login=${SONAR_TOKEN} \
+                        -Dsonar.host.url=${SONAR_HOST_URL} \
+                        -Dsonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco/test/jacocoTestReport.xml
+                        """
+                        //    PR 분석을 위한 -Dsonar.pullrequest.* 파라미터는
+                        //    Jenkins의 GitHub Branch Source 플러그인과 연동 시 자동으로 주입되거나,
+                        //    env.PR_ID 등을 이용해 수동으로 추가해야 합니다.
+                    }
+                }
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        // === 5. Build & Push Docker Image (main 브랜치 푸시 시에만) ===
+        stage('Build & Push Docker Image') {
+            when {
+//                 branch 'main' // main 브랜치일 때만 실행
+                branch 'chore/apply-jenkins'
+            }
+            steps {
+                script {
+                    def imageTag = "${ECR_REGISTRY}/${ECR_REPO_NAME}:${env.BUILD_NUMBER}" // 빌드 번호로 태그
+                    def latestTag = "${ECR_REGISTRY}/${ECR_REPO_NAME}:latest"
+
+                    sh "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}"
+
+                    withCredentials([usernamePassword(credentialsId: GPR_CREDENTIALS_ID, usernameVariable: 'GITHUB_ACTOR', passwordVariable: 'GITHUB_TOKEN')]) {
+                        sh "docker build --build-arg GITHUB_ACTOR=${GITHUB_ACTOR} --build-arg GITHUB_TOKEN=${GITHUB_TOKEN} -t ${imageTag} -t ${latestTag} ."
+                    }
+
+                    sh "docker push ${imageTag}"
+                    sh "docker push ${latestTag}"
+                }
+            }
+        }
+
+        // === 6. Deploy to ECS (main 브랜치 푸시 시에만) ===
+        stage('Deploy to ECS') {
+            when {
+//                 branch 'main' // main 브랜치일 때만 실행
+                branch 'chore/apply-jenkins'
+            }
+            steps {
+                script {
+                    sh """
+                    aws ecs update-service \
+                      --cluster ${ECS_CLUSTER_NAME} \
+                      --service ${ECS_SERVICE_NAME} \
+                      --force-new-deployment \
+                      --region ${AWS_REGION}
+                    """
+
+                    sh """
+                    echo "Waiting for service ${ECS_SERVICE_NAME} to stabilize..."
+                    aws ecs wait services-stable \
+                      --cluster ${ECS_CLUSTER_NAME} \
+                      --service ${ECS_SERVICE_NAME} \
+                      --region ${AWS_REGION}
+                    """
+                }
+            }
+        }
+    } // stages 끝
+
+    // 5. 빌드 후 항상 실행
+    post {
+        always {
+            sh 'rm -f src/main/resources/firebase/serviceAccountKey.json'
+            archiveArtifacts artifacts: 'build/reports/jacoco/test/html/**', allowEmptyArchive: true, fingerprint: true
+            archiveArtifacts artifacts: 'build/reports/tests/test/**', allowEmptyArchive: true, fingerprint: true
+            junit 'build/test-results/test/*.xml'
+            cleanWs() // 워크스페이스 정리
+        }
+    }
+} // pipeline 끝
