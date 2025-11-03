@@ -42,4 +42,5 @@ out/
 conf/*.conf
 
 ### firebase ###
-**/firebase/serviceAccountKey.json
+**/firebase/serviceAccountKey.json!/docker.sh
+/docker.sh
