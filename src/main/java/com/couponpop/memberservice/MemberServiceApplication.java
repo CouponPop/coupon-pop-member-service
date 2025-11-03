@@ -1,13 +1,13 @@
-package com.couponpop.member;
+package com.couponpop.memberservice;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class CouponpopMemberApplication {
+public class MemberServiceApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(CouponpopMemberApplication.class, args);
+        SpringApplication.run(MemberServiceApplication.class, args);
     }
 
 }

@@ -1,10 +1,10 @@
-package com.couponpop.member;
+package com.couponpop.memberservice;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-class CouponpopMemberApplicationTests {
+class MemberServiceApplicationTests {
 
     @Test
     void contextLoads() {
