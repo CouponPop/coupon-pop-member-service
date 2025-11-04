@@ -43,10 +43,9 @@ public class AuthController {
     @PostMapping("/logout")
     @PreAuthorize("isAuthenticated()") // auth는 모두 접근가능하므로, 로그아웃은 인증된 사용자만 접근 가능
     public ResponseEntity<ApiResponse<Void>> logout(@RequestHeader(HttpHeaders.AUTHORIZATION) String authorizationHeader,
-                                                    @CurrentMember AuthMember authMember,
                                                     @Valid @RequestBody LogoutRequest logoutRequest) {
 
-        authService.logout(authorizationHeader, logoutRequest, authMember);
+        authService.logout(authorizationHeader, logoutRequest);
         return ApiResponse.noContent();
     }
 

@@ -84,20 +84,18 @@ public class AuthService {
         return LoginResponse.from(accessToken);
     }
 
-
-    // TODO: FCM 토큰 관련 로직 다른 서비스로 요청하는 방식으로 변경 필요
-    // TODO: JwtProvider 관련 로직은 모듈에서 모두 처리하도록 변경 필요
-
     // 트랜잭션은 DB 작업(FcmToken 삭제)만 보장하며,
     // Redis 블랙리스트 작업은 별도 (분산 트랜잭션 고려하지 않음)
     @Transactional
-    public void logout(String authorizationHeader, LogoutRequest logoutRequest, AuthMember authMember) {
+    public void logout(String authorizationHeader, LogoutRequest logoutRequest) {
 
         String resolvedToken = extractToken(authorizationHeader);
         long expirationMillis = jwtProvider.getExpirationMillis(resolvedToken);
 
         blacklistToken(resolvedToken, expirationMillis);
-//        expireFcmToken(authMember.id(), logoutRequest.fcmToken());
+
+        // TODO: Phase3
+//        fcmTokenInternalService.expireFcmToken(FcmTokenExpireRequest.from(logoutRequest.fcmToken()));
     }
 
     // 회원 탈퇴가 되면 토큰만료 이벤트 발행, 회원탈퇴가 되지 않으면 롤백
@@ -111,7 +109,8 @@ public class AuthService {
                 .orElseThrow(() -> new GlobalException(MemberErrorCode.MEMBER_NOT_FOUND));
 
         memberToWithdraw.withdraw();
-//        expireFcmToken(memberToWithdraw.getId(), withdrawRequest.fcmToken());
+        // TODO: Phase3
+//        fcmTokenInternalService.expireFcmToken(FcmTokenExpireRequest.from(withdrawRequest.fcmToken()));
         publishBlacklistTokenEvent(resolvedToken, expirationMillis);
     }
 
@@ -127,14 +126,6 @@ public class AuthService {
         eventPublisher.publishEvent(event);
         log.debug("[publishBlacklistTokenEvent] 토큰 블랙리스트 이벤트 발행 - token={}", token);
     }
-
-//    // FCM 토큰 삭제는 실패하더라도 전체 작업이 롤백되지는 않도록 ifPresent 사용
-//    private void expireFcmToken(Long memberId, String fcmToken) {
-//
-//        memberFcmTokenRepository
-//                .findByMemberIdAndFcmToken(memberId, fcmToken)
-//                .ifPresent(memberFcmTokenRepository::delete);
-//    }
 
     private String extractToken(String authorizationHeader) {
         return Optional.ofNullable(jwtProvider.resolveToken(authorizationHeader))
