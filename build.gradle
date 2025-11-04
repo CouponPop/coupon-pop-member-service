@@ -109,6 +109,9 @@ dependencies {
     // [AWS]
     implementation 'io.awspring.cloud:spring-cloud-aws-starter-parameter-store'
 
+    // [OpenFeign]
+    implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
+
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 
@@ -121,8 +124,8 @@ dependencies {
     testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
-    // [OpenFeign]
-    implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
+    testImplementation 'org.testcontainers:testcontainers'
+    testImplementation 'org.testcontainers:junit-jupiter'
 }
 
 tasks.named('test') {
