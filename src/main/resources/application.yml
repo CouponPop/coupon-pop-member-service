@@ -46,3 +46,8 @@ jwt:
       - /swagger-resources/**
       - /webjars/**
       - /docs/**
+
+client:
+  notification-service:
+    name: notification-service
+    url: ${NOTIFICATION_SERVICE_URL}
