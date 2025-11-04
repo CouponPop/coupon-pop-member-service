@@ -1,7 +1,7 @@
 FROM amazoncorretto:17-alpine-jdk
 WORKDIR /app
 
-COPY build/libs/*.jar app.jar
+COPY build/libs/*[!plain].jar app.jar
 
 EXPOSE 8080
 
