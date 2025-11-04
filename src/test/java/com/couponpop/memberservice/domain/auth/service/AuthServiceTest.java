@@ -1,16 +1,22 @@
 package com.couponpop.memberservice.domain.auth.service;
 
+import com.couponpop.couponpopcoremodule.dto.fcmtoken.request.FcmTokenExpireRequest;
 import com.couponpop.memberservice.domain.auth.dto.request.LoginRequest;
 import com.couponpop.memberservice.domain.auth.dto.request.LogoutRequest;
 import com.couponpop.memberservice.domain.auth.dto.request.SignUpRequest;
+import com.couponpop.memberservice.domain.auth.dto.request.WithdrawRequest;
 import com.couponpop.memberservice.domain.auth.dto.response.LoginResponse;
 import com.couponpop.memberservice.domain.auth.dto.response.SignUpResponse;
+import com.couponpop.memberservice.domain.auth.event.TokenBlacklistEvent;
 import com.couponpop.memberservice.domain.auth.exception.AuthErrorCode;
 import com.couponpop.memberservice.domain.member.entity.Member;
 import com.couponpop.memberservice.domain.member.enums.MemberType;
+import com.couponpop.memberservice.domain.member.exception.MemberErrorCode;
 import com.couponpop.memberservice.domain.member.repository.MemberRepository;
 import com.couponpop.memberservice.domain.member.service.MemberService;
 import com.couponpop.memberservice.global.exception.GlobalException;
+import com.couponpop.memberservice.global.feign.fcmtoken.FcmTokenFeignClient;
+import com.couponpop.memberservice.utils.TestUtils;
 import com.couponpop.security.blacklist.service.TokenBlacklistService;
 import com.couponpop.security.dto.AuthMember;
 import com.couponpop.security.token.JwtProvider;
@@ -19,12 +25,15 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -47,8 +56,8 @@ class AuthServiceTest {
     @Mock
     private JwtProvider jwtProvider;
 
-//    @Mock
-//    private MemberFcmTokenRepository memberFcmTokenRepository;
+    @Mock
+    private FcmTokenFeignClient fcmTokenFeignClient;
 
     @Mock
     private TokenBlacklistService tokenBlacklistService;
@@ -218,55 +227,52 @@ class AuthServiceTest {
     }
 
     // TODO: MemberFcmTokenRepository 의존성 분리 후 테스트 리팩터링 필요
-//    @Nested
-//    @DisplayName("로그아웃")
-//    class LogoutTests {
-//
-//        @Test
-//        @DisplayName("로그아웃 정보를 받아 로그아웃에 성공한다.")
-//        void logoutSuccess() {
-//
-//            // given
-//            MemberFcmToken mockFcmToken = TestUtils.createEntity(MemberFcmToken.class, Map.of("fcmToken", "testFcmToken"));
-//
-//            given(jwtProvider.resolveToken(testAuthorizationHeader)).willReturn(testToken);
-//            given(jwtProvider.getExpirationMillis(testToken)).willReturn(testExpirationMillis);
-//
-//            given(memberFcmTokenRepository.findByMemberIdAndFcmToken(testAuthMember.id(), testLogoutRequest.fcmToken()))
-//                    .willReturn(Optional.of(mockFcmToken));
-//
-//            // when
-//            authService.logout(testAuthorizationHeader, testLogoutRequest, testAuthMember);
-//
-//            // then
-//            // 1. JWT 검증
-//            verify(jwtProvider).resolveToken(testAuthorizationHeader);
-//            verify(jwtProvider).getExpirationMillis(testToken);
-//            verify(tokenBlacklistService).blacklistToken(testToken, testExpirationMillis);
-//
-//            // 2. FCM Token 검증
-//            verify(memberFcmTokenRepository).findByMemberIdAndFcmToken(testAuthMember.id(), testLogoutRequest.fcmToken());
-//            verify(memberFcmTokenRepository).delete(mockFcmToken);
-//        }
-//
-//        @Test
-//        @DisplayName("토큰이 존재하지 않으면, 로그아웃에 실패한다.")
-//        void logoutFailureInvalidTokenHeader() {
-//
-//            // given
-//            testLogoutRequest = new LogoutRequest("testFcmToken");
-//
-//            given(jwtProvider.resolveToken(testAuthorizationHeader)).willReturn(null);
-//
-//            // when & then
-//            GlobalException exception = assertThrows(GlobalException.class, () -> {
-//                authService.logout(testAuthorizationHeader, testLogoutRequest, testAuthMember);
-//            });
-//
-//            assertThat(exception.getErrorCode()).isEqualTo(AuthErrorCode.INVALID_TOKEN);
-//            verify(memberFcmTokenRepository, never()).findByMemberIdAndFcmToken(anyLong(), anyString());
-//        }
-//
+    @Nested
+    @DisplayName("로그아웃")
+    class LogoutTests {
+
+        @Test
+        @DisplayName("로그아웃 정보를 받아 로그아웃에 성공한다.")
+        void logoutSuccess() {
+
+            // given
+            given(jwtProvider.resolveToken(testAuthorizationHeader)).willReturn(testToken);
+            given(jwtProvider.getExpirationMillis(testToken)).willReturn(testExpirationMillis);
+
+            // when
+            authService.logout(testAuthorizationHeader, testLogoutRequest);
+
+            // then
+            // 1. JWT 검증
+            verify(jwtProvider).resolveToken(testAuthorizationHeader);
+            verify(jwtProvider).getExpirationMillis(testToken);
+            verify(tokenBlacklistService).blacklistToken(testToken, testExpirationMillis);
+
+            // 2. 토큰 삭제 호출 검증
+            ArgumentCaptor<FcmTokenExpireRequest> captor = ArgumentCaptor.forClass(FcmTokenExpireRequest.class);
+            verify(fcmTokenFeignClient).expireFcmToken(captor.capture());
+            assertThat(captor.getValue().fcmToken()).isEqualTo(testLogoutRequest.fcmToken());
+        }
+
+        @Test
+        @DisplayName("토큰이 존재하지 않으면, 로그아웃에 실패한다.")
+        void logoutFailureInvalidTokenHeader() {
+
+            // given
+            testLogoutRequest = new LogoutRequest("testFcmToken");
+
+            given(jwtProvider.resolveToken(testAuthorizationHeader)).willReturn(null);
+
+            // when & then
+            GlobalException exception = assertThrows(GlobalException.class, () -> {
+                authService.logout(testAuthorizationHeader, testLogoutRequest);
+            });
+
+            assertThat(exception.getErrorCode()).isEqualTo(AuthErrorCode.INVALID_TOKEN);
+            verify(fcmTokenFeignClient, never()).expireFcmToken(any());
+        }
+
+        // TODO: 필요없을 것 같긴 한데 혹시 모르니 놔두겠습니다 확인해주세요!
 //        @Test
 //        @DisplayName("로그아웃 시 FCM 토큰이 없어도 로그아웃에 성공한다.")
 //        void logoutSuccessWithoutFcmToken() {
@@ -293,77 +299,73 @@ class AuthServiceTest {
 //            // 2. FCM Token 검증
 //            verify(memberFcmTokenRepository).findByMemberIdAndFcmToken(testAuthMember.id(), testLogoutRequest.fcmToken());
 //        }
-//    }
-//
-//    @Nested
-//    @DisplayName("회원 탈퇴")
-//    class WithdrawTests {
-//
-//        @Test
-//        @DisplayName("회원 탈퇴 정보를 받아 회원 탈퇴에 성공한다.")
-//        void withdrawSuccess() {
-//
-//            // given
-//            Member mockMember = TestUtils.createEntity(Member.class, Map.of(
-//                    "id", 1L,
-//                    "username", "테스트이름",
-//                    "email", "test@example.com",
-//                    "password", "encodedPassword",
-//                    "phoneNumber", "01012345678",
-//                    "memberType", MemberType.CUSTOMER
-//            ));
-//
-//            WithdrawRequest testWithdrawRequest = new WithdrawRequest("testFcmToken");
-//            MemberFcmToken mockFcmToken = TestUtils.createEntity(MemberFcmToken.class, Map.of("fcmToken", "testFcmToken"));
-//
-//            // member 조회
-//            given(memberRepository.findById(testAuthMember.id())).willReturn(Optional.of(mockMember));
-//
-//            // JWT
-//            given(jwtProvider.resolveToken(testAuthorizationHeader)).willReturn(testToken);
-//            given(jwtProvider.getExpirationMillis(testToken)).willReturn(testExpirationMillis);
-//
-//            // FCM 토큰
-//            given(memberFcmTokenRepository.findByMemberIdAndFcmToken(testAuthMember.id(), testWithdrawRequest.fcmToken()))
-//                    .willReturn(Optional.of(mockFcmToken));
-//
-//            // when
-//            authService.withdraw(testAuthorizationHeader, testAuthMember, testWithdrawRequest);
-//
-//            // then
-//            // soft delete 이므로 멤버 상태 변경 검증
-//            assertThat(mockMember.getDeletedAt()).isNotNull()
-//                    .isBeforeOrEqualTo(LocalDateTime.now());
-//
-//            // FCM 토큰
-//            verify(memberFcmTokenRepository).findByMemberIdAndFcmToken(testAuthMember.id(), testWithdrawRequest.fcmToken());
-//            verify(memberFcmTokenRepository).delete(mockFcmToken);
-//
-//            // JWT
-//            verify(eventPublisher).publishEvent(any(TokenBlacklistEvent.class));
-//        }
-//
-//        @Test
-//        @DisplayName("회원 탈퇴 시 멤버를 찾지 못하면 예외가 발생한다.")
-//        void withdrawFailureMemberNotFound() {
-//
-//            // given
-//            WithdrawRequest testWithdrawRequest = new WithdrawRequest("testFcmToken");
-//            given(memberRepository.findById(testAuthMember.id()))
-//                    .willThrow(new GlobalException(MemberErrorCode.MEMBER_NOT_FOUND));
-//
-//            // JWT
-//            given(jwtProvider.resolveToken(testAuthorizationHeader)).willReturn(testToken);
-//            given(jwtProvider.getExpirationMillis(testToken)).willReturn(testExpirationMillis);
-//
-//            // when & then
-//            GlobalException exception = assertThrows(GlobalException.class,
-//                    () -> authService.withdraw("Bearer " + testToken, testAuthMember, testWithdrawRequest));
-//
-//            assertThat(exception.getErrorCode()).isEqualTo(MemberErrorCode.MEMBER_NOT_FOUND);
-//
-//            verify(memberFcmTokenRepository, never()).delete(any());
-//            verify(eventPublisher, never()).publishEvent(any());
-//        }
-//    }
+    }
+
+    @Nested
+    @DisplayName("회원 탈퇴")
+    class WithdrawTests {
+
+        @Test
+        @DisplayName("회원 탈퇴 정보를 받아 회원 탈퇴에 성공한다.")
+        void withdrawSuccess() {
+
+            // given
+            Member mockMember = TestUtils.createEntity(Member.class, Map.of(
+                    "id", 1L,
+                    "username", "테스트이름",
+                    "email", "test@example.com",
+                    "password", "encodedPassword",
+                    "phoneNumber", "01012345678",
+                    "memberType", MemberType.CUSTOMER
+            ));
+
+            WithdrawRequest testWithdrawRequest = new WithdrawRequest("testFcmToken");
+
+            // member 조회
+            given(memberRepository.findById(testAuthMember.id())).willReturn(Optional.of(mockMember));
+
+            // JWT
+            given(jwtProvider.resolveToken(testAuthorizationHeader)).willReturn(testToken);
+            given(jwtProvider.getExpirationMillis(testToken)).willReturn(testExpirationMillis);
+
+            // when
+            authService.withdraw(testAuthorizationHeader, testAuthMember, testWithdrawRequest);
+
+            // then
+            // soft delete 이므로 멤버 상태 변경 검증
+            assertThat(mockMember.getDeletedAt()).isNotNull()
+                    .isBeforeOrEqualTo(LocalDateTime.now());
+
+            // FCM 토큰
+            ArgumentCaptor<FcmTokenExpireRequest> captor = ArgumentCaptor.forClass(FcmTokenExpireRequest.class);
+            verify(fcmTokenFeignClient).expireFcmToken(captor.capture());
+            assertThat(captor.getValue().fcmToken()).isEqualTo(testWithdrawRequest.fcmToken());
+
+            // JWT
+            verify(eventPublisher).publishEvent(any(TokenBlacklistEvent.class));
+        }
+
+        @Test
+        @DisplayName("회원 탈퇴 시 멤버를 찾지 못하면 예외가 발생한다.")
+        void withdrawFailureMemberNotFound() {
+
+            // given
+            WithdrawRequest testWithdrawRequest = new WithdrawRequest("testFcmToken");
+            given(memberRepository.findById(testAuthMember.id()))
+                    .willThrow(new GlobalException(MemberErrorCode.MEMBER_NOT_FOUND));
+
+            // JWT
+            given(jwtProvider.resolveToken(testAuthorizationHeader)).willReturn(testToken);
+            given(jwtProvider.getExpirationMillis(testToken)).willReturn(testExpirationMillis);
+
+            // when & then
+            GlobalException exception = assertThrows(GlobalException.class,
+                    () -> authService.withdraw("Bearer " + testToken, testAuthMember, testWithdrawRequest));
+
+            assertThat(exception.getErrorCode()).isEqualTo(MemberErrorCode.MEMBER_NOT_FOUND);
+
+            verify(fcmTokenFeignClient, never()).expireFcmToken(any());
+            verify(eventPublisher, never()).publishEvent(any());
+        }
+    }
 }
