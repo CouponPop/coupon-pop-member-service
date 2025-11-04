@@ -64,13 +64,11 @@ pipeline {
             steps {
                 withCredentials([usernamePassword(credentialsId: GPR_CREDENTIALS_ID, usernameVariable: 'GITHUB_ACTOR', passwordVariable: 'GITHUB_TOKEN')]) {
                     sh 'chmod +x ./gradlew'
-                    sh """
-                    export GITHUB_ACTOR=${GITHUB_ACTOR}
-                    export GITHUB_TOKEN=${GITHUB_TOKEN}
+                    sh '''
                     SPRING_PROFILES_ACTIVE=test \
                     TZ=Asia/Seoul \
                     ./gradlew clean build --no-daemon
-                    """
+                    '''
                     // GHA와 달리 Jenkins는 localhost에서 Redis, Elasticsearch를 자동 실행하지 않습니다.
                     // 이 테스트가 성공하려면 Jenkins 실행 환경에 Redis/Elasticsearch가 있거나,
                     // Testcontainers를 사용하도록 build.gradle이 설정되어야 합니다.
