@@ -29,11 +29,6 @@ pipeline {
         GPR_CREDENTIALS_ID          = 'github-packages-token' // GitHub Packages 읽기용 PAT
         FCM_KEY_CREDENTIALS_ID      = 'fcm-service-account-key' // FCM 키 파일
         SONAR_TOKEN_CREDENTIALS_ID  = 'sonarqube-token' // SonarQube 토큰
-
-        // --- SonarQube ---
-        SONAR_PROJECT_KEY           = "couponpop-${SERVICE_NAME}" // build.gradle과 일치
-        SONAR_HOST_URL              = 'http://sonarqube:9000' // Jenkins System 설정과 일치
-
     }
 
     stages {
