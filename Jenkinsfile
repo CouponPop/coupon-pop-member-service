@@ -12,23 +12,28 @@ pipeline {
     // 환경 변수 정의
     environment {
         // --- 서비스별 수정 필요 ---
-        SERVICE_NAME                = 'member-service' // 🚨 예: 'api-gateway', 'coupon-service'
+        SERVICE_NAME                = 'member-service' // 예: 'api-gateway', 'coupon-service'
         SONAR_PROJECT_KEY           = "couponpop-${SERVICE_NAME}"
 
         // --- 공통 (Jenkins EC2 IAM 역할이 권한을 가짐) ---
         AWS_REGION                  = 'ap-northeast-2'
-        AWS_ACCOUNT_ID              = '802318301972' // 🚨 본인 AWS 계정 ID로 변경
+        AWS_ACCOUNT_ID              = '802318301972' // 본인 AWS 계정 ID로 변경
         ECR_REGISTRY                = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
         ECR_REPO_NAME               = "couponpop/${SERVICE_NAME}"
         ECS_CLUSTER_NAME            = 'couponpop-ecs-cluster'
-        ECS_SERVICE_NAME            = "${SERVICE_NAME}" // 🚨 ECS 서비스 이름 확인
-        ECS_TASK_DEFINITION_FAMILY  = "couponpop-${SERVICE_NAME}-task-definition" // 🚨 Task Def Family 확인
-        SONAR_HOST_URL              = 'http://sonarqube:9000' // 🚨 Jenkins 시스템 설정과 일치
+        ECS_SERVICE_NAME            = "${SERVICE_NAME}" // ECS 서비스 이름 확인
+        ECS_TASK_DEFINITION_FAMILY  = "couponpop-${SERVICE_NAME}-task-definition" // Task Def Family 확인
+        SONAR_HOST_URL              = 'http://sonarqube:9000' // Jenkins 시스템 설정과 일치
 
         // --- Jenkins Credentials ID ---
         GPR_CREDENTIALS_ID          = 'github-packages-token' // GitHub Packages 읽기용 PAT
         FCM_KEY_CREDENTIALS_ID      = 'fcm-service-account-key' // FCM 키 파일
         SONAR_TOKEN_CREDENTIALS_ID  = 'sonarqube-token' // SonarQube 토큰
+
+        // --- SonarQube ---
+        SONAR_PROJECT_KEY           = "couponpop-${SERVICE_NAME}" // build.gradle과 일치
+        SONAR_HOST_URL              = 'http://sonarqube:9000' // Jenkins System 설정과 일치
+
     }
 
     stages {

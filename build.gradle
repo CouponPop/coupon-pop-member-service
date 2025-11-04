@@ -9,6 +9,7 @@ plugins {
     id 'org.springframework.boot' version '3.4.10' // 기존 API 서버와 동일하게 변경
     id 'io.spring.dependency-management' version '1.1.7'
     id 'org.flywaydb.flyway' version '11.14.0'
+    id "org.sonarqube" version '7.0.1.6134'
 }
 
 flyway {
