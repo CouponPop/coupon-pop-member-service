@@ -1,0 +1,7 @@
+# 모든 파일/디렉토리를 일단 무시
+**
+
+# 'build/libs' 디렉토리와 그 안의 .jar 파일만 무시 목록에서 제외
+!build/
+!build/libs/
+!build/libs/*.jar
