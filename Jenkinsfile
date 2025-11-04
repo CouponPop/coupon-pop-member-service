@@ -131,11 +131,39 @@ pipeline {
             }
             steps {
                 script {
+                    // 1. 현재 Task Definition 가져오기
+                    def currentTaskDef = sh(
+                        returnStdout: true,
+                        script: "aws ecs describe-task-definition --task-definition ${ECS_TASK_DEFINITION_FAMILY} --region ${AWS_REGION}"
+                    ).trim()
+
+                    // 2. 컨테이너 이미지 정의를 새 이미지 태그로 변경
+                    def newContainerDefinitions = readJSON(text: currentTaskDef, path: 'taskDefinition.containerDefinitions')
+                    newContainerDefinitions[0].image = env.IMAGE_URI // 첫 번째 컨테이너 이미지 변경
+
+                    // 3. 새 Task Definition 등록
+                    def newTaskDef = sh(
+                        returnStdout: true,
+                        script: """
+                            aws ecs register-task-definition \
+                            --family ${ECS_TASK_DEFINITION_FAMILY} \
+                            --container-definitions '${jsonEncode(newContainerDefinitions)}' \
+                            --network-mode ${readJSON(text: currentTaskDef).taskDefinition.networkMode} \
+                            --cpu ${readJSON(text: currentTaskDef).taskDefinition.cpu} \
+                            --memory ${readJSON(text: currentTaskDef).taskDefinition.memory} \
+                            --requires-compatibilities ${readJSON(text: currentTaskDef).taskDefinition.requiresCompatibilities.join(' ')} \
+                            --task-role-arn ${readJSON(text: currentTaskDef).taskDefinition.taskRoleArn} \
+                            --execution-role-arn ${readJSON(text: currentTaskDef).taskDefinition.executionRoleArn} \
+                            --region ${AWS_REGION}
+                        """
+                    ).trim()
+
+                    // 4. 새 Task Definition 이용하여 업데이트 --task-definition 사용
                     sh """
                     aws ecs update-service \
                       --cluster ${ECS_CLUSTER_NAME} \
                       --service ${ECS_SERVICE_NAME} \
-                      --force-new-deployment \
+                      --task-definition ${newTaskDefArn} \
                       --region ${AWS_REGION}
                     """
 
