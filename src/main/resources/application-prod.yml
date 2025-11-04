@@ -9,6 +9,11 @@ spring:
   config:
     import: optional:aws-parameterstore:/couponpop/prod/member-service/
 
+client:
+  notification-service:
+    name: notification-service
+    url: http://notification.couponpop.internal:8080
+
 cloud:
   aws:
     region:

@@ -7,6 +7,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 @FeignClient(name = "${client.notification-service.name}", url = "${client.notification-service.url}")
 public interface FcmTokenFeignClient {
 
-    @PostMapping("/v1/fcm-token/expire")
+    @PostMapping("/internal/v1/fcm-token/expire")
     void expireFcmToken(FcmTokenExpireRequest fcmTokenExpireRequest);
 }
