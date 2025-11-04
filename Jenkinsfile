@@ -34,8 +34,6 @@ pipeline {
         stage('Checkout') {
             steps {
                 // Multibranch Pipeline이 자동으로 코드를 checkout 해줍니다.
-                // 수동으로 checkout 할 경우:
-                // checkout scm
                 script {
                     // PULL_REQUEST인 경우 PR 관련 변수 설정 (SonarQube 분석용)
                     if (env.CHANGE_ID) {
@@ -47,7 +45,7 @@ pipeline {
             }
         }
 
-        // === 2. Prepare Test Environment ===
+        // === 2. Prepare Test Env ===
         stage('Prepare Test Env') {
             steps {
                 withCredentials([file(credentialsId: FCM_KEY_CREDENTIALS_ID, variable: 'FCM_KEY_FILE')]) {
@@ -57,15 +55,15 @@ pipeline {
             }
         }
 
-        // === 3. Build & Test (모든 브랜치에서 실행) ===
-        stage('Build & Test') {
+        // === 3. Test & Generate Reports (모든 브랜치) ===
+        stage('Build, Test & Generate Reports') {
             steps {
                 withCredentials([usernamePassword(credentialsId: GPR_CREDENTIALS_ID, usernameVariable: 'GITHUB_ACTOR', passwordVariable: 'GITHUB_TOKEN')]) {
                     sh 'chmod +x ./gradlew'
                     sh '''
                     SPRING_PROFILES_ACTIVE=test \
                     TZ=Asia/Seoul \
-                    ./gradlew clean build --no-daemon
+                    ./gradlew clean build --no-daemon || exit 1
                     '''
                     // GHA와 달리 Jenkins는 localhost에서 Redis, Elasticsearch를 자동 실행하지 않습니다.
                     // 이 테스트가 성공하려면 Jenkins 실행 환경에 Redis/Elasticsearch가 있거나,
@@ -74,22 +72,19 @@ pipeline {
             }
         }
 
-        // === 4. SonarQube Analysis (모든 브랜치에서 실행) ===
+        // === 4. SonarQube Analysis (모든 브랜치) ===
         stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('SonarQube') {
                     withCredentials([string(credentialsId: SONAR_TOKEN_CREDENTIALS_ID, variable: 'SONAR_TOKEN')]) {
-                        sh """
+                        sh '''
                         ./gradlew sonar \
                         -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
                         -Dsonar.projectName=${SONAR_PROJECT_KEY} \
                         -Dsonar.login=${SONAR_TOKEN} \
                         -Dsonar.host.url=${SONAR_HOST_URL} \
                         -Dsonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco/test/jacocoTestReport.xml
-                        """
-                        //    PR 분석을 위한 -Dsonar.pullrequest.* 파라미터는
-                        //    Jenkins의 GitHub Branch Source 플러그인과 연동 시 자동으로 주입되거나,
-                        //    env.PR_ID 등을 이용해 수동으로 추가해야 합니다.
+                        '''
                     }
                 }
                 timeout(time: 5, unit: 'MINUTES') {
@@ -101,7 +96,7 @@ pipeline {
         // === 5. Build & Push Docker Image (main 브랜치 푸시 시에만) ===
         stage('Build & Push Docker Image') {
             when {
-//                 branch 'main' // main 브랜치일 때만 실행
+                // branch 'main' // (테스트 완료 후 'main'으로 변경)
                 branch 'chore/apply-jenkins'
             }
             steps {
@@ -111,9 +106,8 @@ pipeline {
 
                     sh "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}"
 
-                    withCredentials([usernamePassword(credentialsId: GPR_CREDENTIALS_ID, usernameVariable: 'GITHUB_ACTOR', passwordVariable: 'GITHUB_TOKEN')]) {
-                        sh "docker build --build-arg GITHUB_ACTOR=${GITHUB_ACTOR} --build-arg GITHUB_TOKEN=${GITHUB_TOKEN} -t ${imageTag} -t ${latestTag} ."
-                    }
+                    // Dockerfile이 GPR에 접근하지 않으므로 withCredentials 및 build-arg 제거
+                    sh "docker build -t ${imageTag} -t ${latestTag} ."
 
                     sh "docker push ${imageTag}"
                     sh "docker push ${latestTag}"
@@ -124,7 +118,7 @@ pipeline {
         // === 6. Deploy to ECS (main 브랜치 푸시 시에만) ===
         stage('Deploy to ECS') {
             when {
-//                 branch 'main' // main 브랜치일 때만 실행
+                // branch 'main' // (테스트 완료 후 'main'으로 변경)
                 branch 'chore/apply-jenkins'
             }
             steps {
@@ -135,11 +129,9 @@ pipeline {
                         returnStdout: true,
                         script: "aws ecs describe-task-definition --task-definition ${ECS_TASK_DEFINITION_FAMILY} --region ${AWS_REGION}"
                     ).trim()
-                    echo "Current Task Definition Raw JSON: ${currentTaskDef}"
 
                     // 2. 컨테이너 이미지 정의를 새 이미지 태그로 변경
                     def taskDefJson = readJSON(text: currentTaskDef)
-
                     def containerDefinitions = taskDefJson.taskDefinition.containerDefinitions
 
                     if (containerDefinitions == null || containerDefinitions.isEmpty()) {
@@ -150,8 +142,7 @@ pipeline {
                     def currentImageUri = "${ECR_REGISTRY}/${ECR_REPO_NAME}:${env.BUILD_NUMBER}"
                     echo "New Image URI to set: ${currentImageUri}"
 
-                    // image 필드에 String 값을 직접 할당
-                    containerDefinitions[0].image = currentImageUri.toString() // String으로 명시적 변환
+                    containerDefinitions[0].image = currentImageUri.toString()
 
                     // 3. 새 Task Definition 등록에 필요한 다른 속성들 추출 및 정리
                     def newTaskDefinitionPayload = [:]
@@ -175,13 +166,10 @@ pipeline {
                         newTaskDefinitionPayload.tags = taskDefJson.taskDefinition.tags
                     }
 
-                    // newTaskDefinitionPayload를 JSON 파일로 저장
                     def taskDefFilePath = "new-task-definition.json"
                     writeJSON(file: taskDefFilePath, json: newTaskDefinitionPayload, pretty: 1)
                     echo "New Task Definition Payload written to ${taskDefFilePath}"
-                    sh "cat ${taskDefFilePath}" // 파일 내용 확인용
 
-                    // register-task-definition에 --cli-input-json file:// 사용
                     def newTaskDef = sh(
                         returnStdout: true,
                         script: """
@@ -194,7 +182,7 @@ pipeline {
                     def newTaskDefArn = readJSON(text: newTaskDef).taskDefinition.taskDefinitionArn
                     echo "Registered new Task Definition: ${newTaskDefArn}"
 
-                    // 4. 새 Task Definition 이용하여 업데이트 --task-definition 사용
+                    // 4. 새 Task Definition 이용하여 업데이트
                     sh """
                     aws ecs update-service \
                       --cluster ${ECS_CLUSTER_NAME} \
@@ -215,7 +203,7 @@ pipeline {
         }
     } // stages 끝
 
-    // 5. 빌드 후 항상 실행
+    // 빌드 후 항상 실행
     post {
         always {
             sh 'rm -f src/main/resources/firebase/serviceAccountKey.json'
