@@ -1,5 +1,3 @@
-// Jenkinsfile (모든 서비스 레포지토리의 루트에 위치)
-
 pipeline {
     agent any // Jenkins 마스터 또는 에이전트에서 실행
 
@@ -148,9 +146,12 @@ pipeline {
                         error "Task Definition ${ECS_TASK_DEFINITION_FAMILY} has no containerDefinitions."
                     }
 
-                    def currentImageUri = "${ECR_REGISTRY}/${ECR_REPO_NAME}:${env.BUILD_NUMBER}" // 빌드된 이미지 URI
+                    // 빌드된 이미지 URI (예: 802318301972.dkr.ecr.ap-northeast-2.amazonaws.com/couponpop/member-service:17)
+                    def currentImageUri = "${ECR_REGISTRY}/${ECR_REPO_NAME}:${env.BUILD_NUMBER}"
+                    echo "New Image URI to set: ${currentImageUri}"
 
-                    containerDefinitions[0].image = currentImageUri // 첫 번째 컨테이너 이미지 변경
+                    // image 필드에 String 값을 직접 할당
+                    containerDefinitions[0].image = currentImageUri.toString() // String으로 명시적 변환
 
                     // 3. 새 Task Definition 등록에 필요한 다른 속성들 추출 및 정리
                     def newTaskDefinitionPayload = [:]
