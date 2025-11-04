@@ -132,31 +132,66 @@ pipeline {
             steps {
                 script {
                     // 1. 현재 Task Definition 가져오기
+                    // --- 디버깅 시작 ---
+                    // ECS_TASK_DEFINITION_FAMILY 변수 값 확인
+                    echo "ECS_TASK_DEFINITION_FAMILY: ${ECS_TASK_DEFINITION_FAMILY}"
+
+                    // describe-task-definition 명령의 결과 출력
                     def currentTaskDef = sh(
                         returnStdout: true,
                         script: "aws ecs describe-task-definition --task-definition ${ECS_TASK_DEFINITION_FAMILY} --region ${AWS_REGION}"
                     ).trim()
+                    echo "Current Task Definition Raw JSON: ${currentTaskDef}"
+                    // --- 디버깅 끝 ---
 
                     // 2. 컨테이너 이미지 정의를 새 이미지 태그로 변경
-                    def newContainerDefinitions = readJSON(text: currentTaskDef, path: 'taskDefinition.containerDefinitions')
-                    newContainerDefinitions[0].image = env.IMAGE_URI // 첫 번째 컨테이너 이미지 변경
+                    def taskDefJson = readJSON(text: currentTaskDef) // 전체 JSON을 읽어옴
 
-                    // 3. 새 Task Definition 등록
+                    // containerDefinitions 추출 시 배열이 비어있는지 확인
+                    def containerDefinitions = taskDefJson.taskDefinition.containerDefinitions
+
+                    if (containerDefinitions == null || containerDefinitions.isEmpty()) {
+                        error "Task Definition ${ECS_TASK_DEFINITION_FAMILY} has no containerDefinitions."
+                    }
+
+                    // 첫 번째 컨테이너의 이미지 변경
+                    containerDefinitions[0].image = env.IMAGE_URI // 첫 번째 컨테이너 이미지 변경
+
+                    // 3. 새 Task Definition 등록에 필요한 다른 속성들 추출
+                    //    주의: register-task-definition에는 taskDefinitionArn, revision, status, compatibilities, registeredAt, registeredBy 같은 필드는 포함되면 안 됨.
+                    //    readJSON으로 전체 taskDefinition을 가져온 후, 이 필드들을 제거해야 함.
+                    def newTaskDefinitionPayload = [:]
+                    newTaskDefinitionPayload.family = taskDefJson.taskDefinition.family
+                    newTaskDefinitionPayload.containerDefinitions = containerDefinitions
+                    newTaskDefinitionPayload.networkMode = taskDefJson.taskDefinition.networkMode
+                    newTaskDefinitionPayload.cpu = taskDefJson.taskDefinition.cpu
+                    newTaskDefinitionPayload.memory = taskDefJson.taskDefinition.memory
+                    newTaskDefinitionPayload.requiresCompatibilities = taskDefJson.taskDefinition.requiresCompatibilities
+
+                    // taskRoleArn, executionRoleArn은 없을 수도 있으므로, null 체크 후 추가
+                    if (taskDefJson.taskDefinition.taskRoleArn) {
+                        newTaskDefinitionPayload.taskRoleArn = taskDefJson.taskDefinition.taskRoleArn
+                    }
+                    if (taskDefJson.taskDefinition.executionRoleArn) {
+                        newTaskDefinitionPayload.executionRoleArn = taskDefJson.taskDefinition.executionRoleArn
+                    }
+                    // volumes도 있다면 추가
+                    if (taskDefJson.taskDefinition.volumes) {
+                        newTaskDefinitionPayload.volumes = taskDefJson.taskDefinition.volumes
+                    }
+
+                    // register-task-definition에 --cli-input-json 사용
                     def newTaskDef = sh(
                         returnStdout: true,
                         script: """
                             aws ecs register-task-definition \
-                            --family ${ECS_TASK_DEFINITION_FAMILY} \
-                            --container-definitions '${jsonEncode(newContainerDefinitions)}' \
-                            --network-mode ${readJSON(text: currentTaskDef).taskDefinition.networkMode} \
-                            --cpu ${readJSON(text: currentTaskDef).taskDefinition.cpu} \
-                            --memory ${readJSON(text: currentTaskDef).taskDefinition.memory} \
-                            --requires-compatibilities ${readJSON(text: currentTaskDef).taskDefinition.requiresCompatibilities.join(' ')} \
-                            --task-role-arn ${readJSON(text: currentTaskDef).taskDefinition.taskRoleArn} \
-                            --execution-role-arn ${readJSON(text: currentTaskDef).taskDefinition.executionRoleArn} \
+                            --cli-input-json '${jsonEncode(newTaskDefinitionPayload)}' \
                             --region ${AWS_REGION}
                         """
                     ).trim()
+
+                    def newTaskDefArn = readJSON(text: newTaskDef).taskDefinition.taskDefinitionArn
+                    echo "Registered new Task Definition: ${newTaskDefArn}"
 
                     // 4. 새 Task Definition 이용하여 업데이트 --task-definition 사용
                     sh """
