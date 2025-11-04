@@ -8,4 +8,4 @@ management:
 client:
   notification-service:
     name: notification-service
-    url: ${NOTIFICATION_SERVICE_URL:http://localhost:8084/internal}
+    url: http://localhost:8084
