@@ -132,34 +132,34 @@ pipeline {
             steps {
                 script {
                     // 1. 현재 Task Definition 가져오기
-                    // --- 디버깅 시작 ---
-                    // ECS_TASK_DEFINITION_FAMILY 변수 값 확인
                     echo "ECS_TASK_DEFINITION_FAMILY: ${ECS_TASK_DEFINITION_FAMILY}"
-
-                    // describe-task-definition 명령의 결과 출력
                     def currentTaskDef = sh(
                         returnStdout: true,
                         script: "aws ecs describe-task-definition --task-definition ${ECS_TASK_DEFINITION_FAMILY} --region ${AWS_REGION}"
                     ).trim()
                     echo "Current Task Definition Raw JSON: ${currentTaskDef}"
-                    // --- 디버깅 끝 ---
 
                     // 2. 컨테이너 이미지 정의를 새 이미지 태그로 변경
-                    def taskDefJson = readJSON(text: currentTaskDef) // 전체 JSON을 읽어옴
+                    def taskDefJson = readJSON(text: currentTaskDef)
 
-                    // containerDefinitions 추출 시 배열이 비어있는지 확인
                     def containerDefinitions = taskDefJson.taskDefinition.containerDefinitions
 
                     if (containerDefinitions == null || containerDefinitions.isEmpty()) {
                         error "Task Definition ${ECS_TASK_DEFINITION_FAMILY} has no containerDefinitions."
                     }
 
-                    // 첫 번째 컨테이너의 이미지 변경
-                    containerDefinitions[0].image = env.IMAGE_URI // 첫 번째 컨테이너 이미지 변경
+                    // ECR_REPO_NAME이 'couponpop/member-service' 와 같은 형식이고,
+                    // SERVICE_NAME이 'member-service'라면,
+                    // Docker 이미지 태그는 "802318301972.dkr.ecr.ap-northeast-2.amazonaws.com/couponpop/member-service:${env.BUILD_NUMBER}"
+                    // IMAGE_URI는 정확히 ECR_REGISTRY/ECR_REPO_NAME:${env.BUILD_NUMBER} 형태가 되어야 함.
+                    // env.IMAGE_URI가 어디서 정의되었는지 확인 필요.
+                    // 만약 정의되지 않았다면, 여기서 정의.
+                    // (이전 stage에서 imageTag를 정의했으므로, 여기서는 그 값을 사용하거나 다시 정의)
+                    def currentImageUri = "${ECR_REGISTRY}/${ECR_REPO_NAME}:${env.BUILD_NUMBER}" // ✅ [수정] 빌드된 이미지 URI
 
-                    // 3. 새 Task Definition 등록에 필요한 다른 속성들 추출
-                    //    주의: register-task-definition에는 taskDefinitionArn, revision, status, compatibilities, registeredAt, registeredBy 같은 필드는 포함되면 안 됨.
-                    //    readJSON으로 전체 taskDefinition을 가져온 후, 이 필드들을 제거해야 함.
+                    containerDefinitions[0].image = currentImageUri // 첫 번째 컨테이너 이미지 변경
+
+                    // 3. 새 Task Definition 등록에 필요한 다른 속성들 추출 및 정리
                     def newTaskDefinitionPayload = [:]
                     newTaskDefinitionPayload.family = taskDefJson.taskDefinition.family
                     newTaskDefinitionPayload.containerDefinitions = containerDefinitions
@@ -168,24 +168,32 @@ pipeline {
                     newTaskDefinitionPayload.memory = taskDefJson.taskDefinition.memory
                     newTaskDefinitionPayload.requiresCompatibilities = taskDefJson.taskDefinition.requiresCompatibilities
 
-                    // taskRoleArn, executionRoleArn은 없을 수도 있으므로, null 체크 후 추가
                     if (taskDefJson.taskDefinition.taskRoleArn) {
                         newTaskDefinitionPayload.taskRoleArn = taskDefJson.taskDefinition.taskRoleArn
                     }
                     if (taskDefJson.taskDefinition.executionRoleArn) {
                         newTaskDefinitionPayload.executionRoleArn = taskDefJson.taskDefinition.executionRoleArn
                     }
-                    // volumes도 있다면 추가
                     if (taskDefJson.taskDefinition.volumes) {
                         newTaskDefinitionPayload.volumes = taskDefJson.taskDefinition.volumes
                     }
+                    // tags가 있다면 추가 (Docker Tags와 다름)
+                    if (taskDefJson.taskDefinition.tags) {
+                        newTaskDefinitionPayload.tags = taskDefJson.taskDefinition.tags
+                    }
 
-                    // register-task-definition에 --cli-input-json 사용
+                    // ✅ [수정] newTaskDefinitionPayload를 JSON 파일로 저장
+                    def taskDefFilePath = "new-task-definition.json"
+                    writeJSON(file: taskDefFilePath, json: newTaskDefinitionPayload, pretty: true)
+                    echo "New Task Definition Payload written to ${taskDefFilePath}"
+                    sh "cat ${taskDefFilePath}" // 파일 내용 확인용
+
+                    // register-task-definition에 --cli-input-json file:// 사용
                     def newTaskDef = sh(
                         returnStdout: true,
                         script: """
                             aws ecs register-task-definition \
-                            --cli-input-json '${jsonEncode(newTaskDefinitionPayload)}' \
+                            --cli-input-json "file://${taskDefFilePath}" \
                             --region ${AWS_REGION}
                         """
                     ).trim()
