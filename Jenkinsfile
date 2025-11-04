@@ -148,14 +148,7 @@ pipeline {
                         error "Task Definition ${ECS_TASK_DEFINITION_FAMILY} has no containerDefinitions."
                     }
 
-                    // ECR_REPO_NAME이 'couponpop/member-service' 와 같은 형식이고,
-                    // SERVICE_NAME이 'member-service'라면,
-                    // Docker 이미지 태그는 "802318301972.dkr.ecr.ap-northeast-2.amazonaws.com/couponpop/member-service:${env.BUILD_NUMBER}"
-                    // IMAGE_URI는 정확히 ECR_REGISTRY/ECR_REPO_NAME:${env.BUILD_NUMBER} 형태가 되어야 함.
-                    // env.IMAGE_URI가 어디서 정의되었는지 확인 필요.
-                    // 만약 정의되지 않았다면, 여기서 정의.
-                    // (이전 stage에서 imageTag를 정의했으므로, 여기서는 그 값을 사용하거나 다시 정의)
-                    def currentImageUri = "${ECR_REGISTRY}/${ECR_REPO_NAME}:${env.BUILD_NUMBER}" // ✅ [수정] 빌드된 이미지 URI
+                    def currentImageUri = "${ECR_REGISTRY}/${ECR_REPO_NAME}:${env.BUILD_NUMBER}" // 빌드된 이미지 URI
 
                     containerDefinitions[0].image = currentImageUri // 첫 번째 컨테이너 이미지 변경
 
@@ -177,14 +170,13 @@ pipeline {
                     if (taskDefJson.taskDefinition.volumes) {
                         newTaskDefinitionPayload.volumes = taskDefJson.taskDefinition.volumes
                     }
-                    // tags가 있다면 추가 (Docker Tags와 다름)
                     if (taskDefJson.taskDefinition.tags) {
                         newTaskDefinitionPayload.tags = taskDefJson.taskDefinition.tags
                     }
 
-                    // ✅ [수정] newTaskDefinitionPayload를 JSON 파일로 저장
+                    // newTaskDefinitionPayload를 JSON 파일로 저장
                     def taskDefFilePath = "new-task-definition.json"
-                    writeJSON(file: taskDefFilePath, json: newTaskDefinitionPayload, pretty: true)
+                    writeJSON(file: taskDefFilePath, json: newTaskDefinitionPayload, pretty: 1)
                     echo "New Task Definition Payload written to ${taskDefFilePath}"
                     sh "cat ${taskDefFilePath}" // 파일 내용 확인용
 
