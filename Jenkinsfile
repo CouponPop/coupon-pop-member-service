@@ -55,7 +55,7 @@ pipeline {
             }
         }
 
-        // === 3. Test & Generate Reports (모든 브랜치) ===
+        // === 3. Build, Test & Generate Reports (모든 브랜치) ===
         stage('Build, Test & Generate Reports') {
             steps {
                 withCredentials([usernamePassword(credentialsId: GPR_CREDENTIALS_ID, usernameVariable: 'GITHUB_ACTOR', passwordVariable: 'GITHUB_TOKEN')]) {
@@ -64,6 +64,7 @@ pipeline {
                     SPRING_PROFILES_ACTIVE=test \
                     TZ=Asia/Seoul \
                     ./gradlew clean build --no-daemon || exit 1
+                    rm -f build/libs/*plain*.jar
                     '''
                     // GHA와 달리 Jenkins는 localhost에서 Redis, Elasticsearch를 자동 실행하지 않습니다.
                     // 이 테스트가 성공하려면 Jenkins 실행 환경에 Redis/Elasticsearch가 있거나,
