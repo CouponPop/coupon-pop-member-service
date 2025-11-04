@@ -23,7 +23,12 @@ spring:
         dialect: org.hibernate.dialect.H2Dialect
   flyway:
     enabled: false
-      
+
+client:
+  notification-service:
+    name: notification-service
+    url: http://localhost:8084
+
 jwt:
   secret:
     key: Y291cG9ucG9wLXRlc3QtanVuaW9yLWJhY2tlbmQtZGV2ZWxvcGVyLXNlY3JldC1rZXktZm9yLWNpLWNkCg==
