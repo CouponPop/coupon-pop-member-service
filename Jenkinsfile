@@ -82,7 +82,7 @@ pipeline {
                 withSonarQubeEnv('SonarQube') {
                     withCredentials([string(credentialsId: SONAR_TOKEN_CREDENTIALS_ID, variable: 'SONAR_TOKEN')]) {
                         sh """
-                        ./gradlew sonarqube \
+                        ./gradlew sonar \
                         -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
                         -Dsonar.projectName=${SONAR_PROJECT_KEY} \
                         -Dsonar.login=${SONAR_TOKEN} \
