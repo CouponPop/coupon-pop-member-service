@@ -1,5 +1,6 @@
 package com.couponpop.memberservice.domain.auth.service;
 
+import com.couponpop.couponpopcoremodule.dto.fcmtoken.request.FcmTokenExpireRequest;
 import com.couponpop.memberservice.domain.auth.dto.request.LoginRequest;
 import com.couponpop.memberservice.domain.auth.dto.request.LogoutRequest;
 import com.couponpop.memberservice.domain.auth.dto.request.SignUpRequest;
@@ -12,6 +13,7 @@ import com.couponpop.memberservice.domain.member.entity.Member;
 import com.couponpop.memberservice.domain.member.exception.MemberErrorCode;
 import com.couponpop.memberservice.domain.member.repository.MemberRepository;
 import com.couponpop.memberservice.global.exception.GlobalException;
+import com.couponpop.memberservice.global.feign.fcmtoken.FcmTokenFeignClient;
 import com.couponpop.security.blacklist.service.TokenBlacklistService;
 import com.couponpop.security.dto.AuthMember;
 import com.couponpop.security.token.JwtProvider;
@@ -36,6 +38,8 @@ public class AuthService {
     private final MemberRepository memberRepository;
     private final TokenBlacklistService tokenBlacklistService;
     private final ApplicationEventPublisher eventPublisher;
+
+    private final FcmTokenFeignClient fcmTokenFeignClient;
 
     @Transactional
     public SignUpResponse signUp(SignUpRequest signUpRequest) {
@@ -94,8 +98,8 @@ public class AuthService {
 
         blacklistToken(resolvedToken, expirationMillis);
 
-        // TODO: Phase3
-//        fcmTokenInternalService.expireFcmToken(FcmTokenExpireRequest.from(logoutRequest.fcmToken()));
+        FcmTokenExpireRequest fcmTokenExpireRequest = FcmTokenExpireRequest.from(logoutRequest.fcmToken());
+        fcmTokenFeignClient.expireFcmToken(fcmTokenExpireRequest);
     }
 
     // 회원 탈퇴가 되면 토큰만료 이벤트 발행, 회원탈퇴가 되지 않으면 롤백
@@ -109,8 +113,10 @@ public class AuthService {
                 .orElseThrow(() -> new GlobalException(MemberErrorCode.MEMBER_NOT_FOUND));
 
         memberToWithdraw.withdraw();
-        // TODO: Phase3
-//        fcmTokenInternalService.expireFcmToken(FcmTokenExpireRequest.from(withdrawRequest.fcmToken()));
+
+        FcmTokenExpireRequest fcmTokenExpireRequest = FcmTokenExpireRequest.from(withdrawRequest.fcmToken());
+        fcmTokenFeignClient.expireFcmToken(fcmTokenExpireRequest);
+
         publishBlacklistTokenEvent(resolvedToken, expirationMillis);
     }
 
