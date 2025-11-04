@@ -73,6 +73,14 @@ pipeline {
             }
         }
 
+        stage('Debug: Check Libs') {
+            steps {
+                echo "--- build/libs/ 디렉토리 파일 목록 ---"
+                sh 'ls -l build/libs/'
+                echo "-----------------------------------"
+            }
+        }
+
         // === 4. SonarQube Analysis (모든 브랜치) ===
         stage('SonarQube Analysis') {
             steps {
