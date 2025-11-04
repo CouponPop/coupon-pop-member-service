@@ -49,6 +49,32 @@ def loadGithubCredentials() {
     return credentials
 }
 
+def jacocoExcludes = [
+        // --- Spring Boot/JPA 관련 ---
+        '**/configuration/**',
+        '**/config/**',
+        '**/dto/**',
+        '**/exception/**',
+        '**/error/**',
+        '**/filter/**',
+        '**/handler/**',
+        '**/security/**',
+        '**/util/**',
+
+        // --- QueryDSL 관련 ---
+        '**/Q*.class',
+
+        // --- 기타 생성 코드 ---
+        '**/*Application.class',
+        '**/Test*.class',
+
+        // --- Flyway 관련 ---
+        '**/db/migration/**',
+
+        // --- Swagger 관련 ---
+        '**/static/docs/**',
+]
+
 group = 'com.couponpop'
 version = '0.0.1-SNAPSHOT'
 description = 'Member Service for CouponPop MSA'
@@ -146,5 +172,12 @@ jacocoTestReport {
         csv.required = false
         html.required = true // 개발자 확인용
         html.outputLocation = layout.buildDirectory.dir('reports/jacoco/test/html')
+    }
+    afterEvaluate {
+        classDirectories.setFrom(
+                files(classDirectories.files.collect {
+                    fileTree(dir: it, exclude: jacocoExcludes)
+                })
+        )
     }
 }
