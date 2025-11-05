@@ -10,8 +10,8 @@ import org.springframework.http.HttpStatus;
 @RequiredArgsConstructor
 public enum AuthErrorCode implements ErrorCode {
 
-    // TODO: Security의 ErrorCode와 통합 검토 필요, MemberErrorCode와도 중복 검토 필요
-    
+    // TODO: Security의 ErrorCode와 통합 검토 필요, MemberErrorCode와도 중복 검토 필요!
+
     PASSWORDS_NOT_MATCH(HttpStatus.BAD_REQUEST, "비밀번호와 비밀번호 확인이 일치하지 않습니다."),
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "유효하지 않은 토큰입니다. 다시 로그인하세요"),
     EXPIRED_TOKEN(HttpStatus.UNAUTHORIZED, "만료된 토큰입니다. 다시 로그인하세요."),
