@@ -28,26 +28,29 @@ pipeline {
         SONAR_TOKEN_CREDENTIALS_ID  = 'sonarqube-token' // SonarQube 토큰
     }
 
+    when {
+        not {
+            anyOf {
+                changeset pattern: '**/*.md', comparator: 'GLOB'
+                changeset pattern: 'docs/**', comparator: 'GLOB'
+                changeset pattern: '.github/**', comparator: 'GLOB'
+                changeset pattern: '.gitignore', comparator: 'GLOB'
+                changeset pattern: 'LICENSE', comparator: 'GLOB'
+            }
+        }
+    }
+
     stages {
         // === 1. Checkout ===
         stage('Checkout') {
             // dev, main, PR일 때만 실행
-            when {
-                anyOf {
-                    branch 'main'
-                    branch 'dev'
-                    changeRequest() // PR
-                }
-                not {
-                    anyOf {
-                        changeset pattern: '**/*.md', comparator: 'GLOB'
-                        changeset pattern: 'docs/**', comparator: 'GLOB'
-                        changeset pattern: '.github/**', comparator: 'GLOB'
-                        changeset pattern: '.gitignore', comparator: 'GLOB'
-                        changeset pattern: 'LICENSE', comparator: 'GLOB'
-                    }
-                }
-            }
+//             when {
+//                 anyOf {
+//                     branch 'main'
+//                     branch 'dev'
+//                     changeRequest() // PR
+//                 }
+//             }
             steps {
                 script {
                     // PULL_REQUEST인 경우 PR 관련 변수 설정 (SonarQube 분석용)
@@ -81,13 +84,13 @@ pipeline {
         // === 3. Build, Test & Generate Reports ===
         stage('Build, Test & Generate Reports') {
             // dev, main, PR일 때만 실행
-            when {
-                anyOf {
-                    branch 'main'
-                    branch 'dev'
-                    changeRequest() // PR
-                }
-            }
+//             when {
+//                 anyOf {
+//                     branch 'main'
+//                     branch 'dev'
+//                     changeRequest() // PR
+//                 }
+//             }
             steps {
                 withCredentials([usernamePassword(credentialsId: GPR_CREDENTIALS_ID, usernameVariable: 'GITHUB_ACTOR', passwordVariable: 'GITHUB_TOKEN')]) {
                     sh 'chmod +x ./gradlew'
@@ -107,13 +110,13 @@ pipeline {
         // === 4. SonarQube Analysis ===
         stage('SonarQube Analysis') {
             // dev, main, PR일 때만 실행
-            when {
-                anyOf {
-                    branch 'main'
-                    branch 'dev'
-                    changeRequest() // PR
-                }
-            }
+//             when {
+//                 anyOf {
+//                     branch 'main'
+//                     branch 'dev'
+//                     changeRequest() // PR
+//                 }
+//             }
             steps {
                 withSonarQubeEnv('SonarQube') {
                     withCredentials([string(credentialsId: SONAR_TOKEN_CREDENTIALS_ID, variable: 'SONAR_TOKEN')]) {
@@ -136,9 +139,9 @@ pipeline {
         // === 5. Build & Push Docker Image ===
         stage('Build & Push Docker Image') {
             // 'main' 브랜치일 때만 실행
-            when {
-                branch 'main'
-            }
+//             when {
+//                 branch 'main'
+//             }
             steps {
                 withCredentials([string(credentialsId: AWS_ACCOUNT_ID_CREDENTIAL_ID, variable: 'AWS_ACCOUNT_ID')]) {
                     script {
@@ -162,9 +165,9 @@ pipeline {
         // === 6. Deploy to ECS ===
         stage('Deploy to ECS') {
             // 'main' 브랜치일 때만 실행
-            when {
-                branch 'main'
-            }
+//             when {
+//                 branch 'main'
+//             }
             steps {
                 withCredentials([string(credentialsId: AWS_ACCOUNT_ID_CREDENTIAL_ID, variable: 'AWS_ACCOUNT_ID')]) {
                     script {
@@ -187,8 +190,6 @@ pipeline {
                         def ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
                         def currentImageUri = "${ECR_REGISTRY}/${ECR_REPO_NAME}:${env.BUILD_NUMBER}"
                         echo "New Image URI to set: ${currentImageUri}"
-
-                        containerDefinitions[0].image = currentImageUri.toString()
 
                         // [SERVICE_NAME과 일치하는 컨테이너를 동적으로 찾기
                         def containerToUpdate = containerDefinitions.find { it.name == env.SERVICE_NAME }
