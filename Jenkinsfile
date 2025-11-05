@@ -22,7 +22,7 @@ pipeline {
         SONAR_HOST_URL              = 'http://sonarqube:9000' // Jenkins 시스템 설정과 일치
 
         // --- Jenkins Credentials ID ---
-        AWS_ACCOUNT_ID_CREDENTIAL_ID = 'aws-account-id'
+        AWS_ACCOUNT_ID_CREDENTIALS_ID = 'aws-account-id'
         GPR_CREDENTIALS_ID          = 'github-packages-token' // GitHub Packages 읽기용 PAT
         FCM_KEY_CREDENTIALS_ID      = 'fcm-service-account-key' // FCM 키 파일
         SONAR_TOKEN_CREDENTIALS_ID  = 'sonarqube-token' // SonarQube 토큰
@@ -147,7 +147,7 @@ pipeline {
                 // === 5. Build & Push Docker Image ===
                 stage('Build & Push Docker Image') {
                     steps {
-                        withCredentials([string(credentialsId: AWS_ACCOUNT_ID_CREDENTIAL_ID, variable: 'AWS_ACCOUNT_ID')]) {
+                        withCredentials([string(credentialsId: AWS_ACCOUNT_ID_CREDENTIALS_ID, variable: 'AWS_ACCOUNT_ID')]) {
                             script {
                                 def ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
                                 def imageTag = "${ECR_REGISTRY}/${ECR_REPO_NAME}:${env.BUILD_NUMBER}"  // 빌드 번호로 태그
