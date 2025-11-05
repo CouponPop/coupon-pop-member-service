@@ -43,7 +43,7 @@ pipeline {
     stages {
         // === 1. Checkout ===
         stage('Checkout') {
-            dev, main, PR일 때만 실행
+            // dev, main, PR일 때만 실행
             when {
                 anyOf {
                     branch 'chore/jenkins-test'
