@@ -28,18 +28,6 @@ pipeline {
         SONAR_TOKEN_CREDENTIALS_ID  = 'sonarqube-token' // SonarQube 토큰
     }
 
-    // changeset 평가를 위해 기본 checkout을 비활성화합니다.
-    options {
-        skipDefaultCheckout()
-    }
-
-    // 최상위 'when' 조건: 아래 유형의 파일만 변경된 경우 파이프라인을 실행하지 않습니다.
-    when {
-        not {
-            changeset "'**.md', 'docs/**', '.gitignore', '.github/ISSUE_TEMPLATE/**', 'LICENSE'"
-        }
-    }
-
     stages {
         // === 1. Checkout ===
         stage('Checkout') {
@@ -50,11 +38,17 @@ pipeline {
                     branch 'dev'
                     changeRequest() // PR
                 }
+                not {
+                    anyOf {
+                        changeset pattern: '**/*.md', comparator: 'GLOB'
+                        changeset pattern: 'docs/**', comparator: 'GLOB'
+                        changeset pattern: '.github/**', comparator: 'GLOB'
+                        changeset pattern: '.gitignore', comparator: 'GLOB'
+                        changeset pattern: 'LICENSE', comparator: 'GLOB'
+                    }
+                }
             }
             steps {
-                // 수동으로 checkout 실행
-                checkout scm
-
                 script {
                     // PULL_REQUEST인 경우 PR 관련 변수 설정 (SonarQube 분석용)
                     if (env.CHANGE_ID) {
