@@ -9,8 +9,9 @@ pipeline {
 
     // 환경 변수 정의
     environment {
-        // --- 서비스별 수정 필요 --- #❗서비스별로 SERVICE_NAME만 수정하면 됩니다. e.g: 'member-service', coupon-service'
+        // --- 서비스별 수정 필요 --- #❗서비스별로 SERVICE_NAME, ECS_CONTAINER_NAME만 수정하면 됩니다. e.g: 'member-service', 'member'
         SERVICE_NAME                = 'member-service'
+        ECS_CONTAINER_NAME          = 'member'
         SONAR_PROJECT_KEY           = "couponpop-${SERVICE_NAME}"
 
         // --- 공통 (Jenkins EC2 IAM 역할이 권한을 가짐) ---
@@ -187,9 +188,9 @@ pipeline {
                                 def currentImageUri = "${ECR_REGISTRY}/${ECR_REPO_NAME}:${env.BUILD_NUMBER}"
                                 echo "New Image URI to set: ${currentImageUri}"
 
-                                def containerToUpdate = containerDefinitions.find { it.name == env.SERVICE_NAME }
+                                def containerToUpdate = containerDefinitions.find { it.name == env.ECS_CONTAINER_NAME }
                                 if (!containerToUpdate) {
-                                    error "Container with name '${env.SERVICE_NAME}' not found in task definition '${ECS_TASK_DEFINITION_FAMILY}'."
+                                    error "Container with name '${env.ECS_CONTAINER_NAME}' not found in task definition '${ECS_TASK_DEFINITION_FAMILY}'."
                                 }
                                 containerToUpdate.image = currentImageUri.toString()
 
