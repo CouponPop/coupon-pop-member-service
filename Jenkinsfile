@@ -147,7 +147,7 @@ pipeline {
                 // === 5. Build & Push Docker Image ===
                 stage('Build & Push Docker Image') {
                     steps {
-                        withCredentials([string(credentialsId: AWS_ACCOUNT_ID_CREDENTIALS_ID, variable: 'AWS_ACCOUNT_ID')]) {
+                        withCredentials([string(credentialsId: env.AWS_ACCOUNT_ID_CREDENTIALS_ID, variable: 'AWS_ACCOUNT_ID')]) {
                             script {
                                 def ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
                                 def imageTag = "${ECR_REGISTRY}/${ECR_REPO_NAME}:${env.BUILD_NUMBER}"  // 빌드 번호로 태그
@@ -165,7 +165,7 @@ pipeline {
                 // === 6. Deploy to ECS ===
                 stage('Deploy to ECS') {
                     steps {
-                        withCredentials([string(credentialsId: AWS_ACCOUNT_ID_CREDENTIALS_ID, variable: 'AWS_ACCOUNT_ID')]) {
+                        withCredentials([string(credentialsId: env.AWS_ACCOUNT_ID_CREDENTIALS_ID, variable: 'AWS_ACCOUNT_ID')]) {
                             script {
                                 // 1. 현재 Task Definition 가져오기
                                 echo "ECS_TASK_DEFINITION_FAMILY: ${ECS_TASK_DEFINITION_FAMILY}"
