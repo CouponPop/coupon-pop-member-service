@@ -4,8 +4,3 @@ server:
 management:
   endpoints.web.exposure.include: health,info
   endpoint.health.show-details: always
-
-client:
-  notification-service:
-    name: notification-service
-    url: http://localhost:8084
