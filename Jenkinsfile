@@ -26,9 +26,6 @@ pipeline {
         GPR_CREDENTIALS_ID          = 'github-packages-token' // GitHub Packages 읽기용 PAT
         FCM_KEY_CREDENTIALS_ID      = 'fcm-service-account-key' // FCM 키 파일
         SONAR_TOKEN_CREDENTIALS_ID  = 'sonarqube-token' // SonarQube 토큰
-
-        // [FIX] 빌드 트리거 파일 목록을 한 곳에서 정의 (허용 목록)
-        BUILD_REQUIRED_FILES = "src/**,build.gradle,settings.gradle,gradlew,gradle/**,Jenkinsfile,Dockerfile"
     }
 
     stages {
@@ -45,7 +42,15 @@ pipeline {
                         changeRequest() // PR
                     }
                     // 조건 2: 빌드 필요 파일이 변경되었을 때
-                    changeset pattern: env.BUILD_REQUIRED_FILES, comparator: 'GLOB'
+                    anyOf {
+                        changeset pattern: 'src/**', comparator: 'GLOB'
+                        changeset pattern: 'build.gradle', comparator: 'GLOB'
+                        changeset pattern: 'settings.gradle', comparator: 'GLOB'
+                        changeset pattern: 'gradlew', comparator: 'GLOB'
+                        changeset pattern: 'gradle/**', comparator: 'GLOB'
+                        changeset pattern: 'Jenkinsfile', comparator: 'GLOB'
+                        changeset pattern: 'Dockerfile', comparator: 'GLOB'
+                    }
                 }
             }
             stages {
@@ -126,7 +131,15 @@ pipeline {
                         branch 'chore/jenkins-test' // [테스트 브랜치 추가]
                     }
                     // 조건 2: 빌드 필요 파일이 변경되었을 때
-                    changeset pattern: env.BUILD_REQUIRED_FILES, comparator: 'GLOB'
+                    anyOf {
+                        changeset pattern: 'src/**', comparator: 'GLOB'
+                        changeset pattern: 'build.gradle', comparator: 'GLOB'
+                        changeset pattern: 'settings.gradle', comparator: 'GLOB'
+                        changeset pattern: 'gradlew', comparator: 'GLOB'
+                        changeset pattern: 'gradle/**', comparator: 'GLOB'
+                        changeset pattern: 'Jenkinsfile', comparator: 'GLOB'
+                        changeset pattern: 'Dockerfile', comparator: 'GLOB'
+                    }
                 }
             }
             stages {
@@ -240,13 +253,13 @@ pipeline {
 
     // 빌드 후 항상 실행
     post {
-        // 빌드가 성공했을 때만 리포트/아티팩트를 수집
+        // 'success' 블록: 빌드가 성공했을 때만 리포트/아티팩트를 수집
         success {
             archiveArtifacts artifacts: 'build/reports/jacoco/test/html/**', allowEmptyArchive: true, fingerprint: true
             archiveArtifacts artifacts: 'build/reports/tests/test/**', allowEmptyArchive: true, fingerprint: true
-            junit 'build/test-results/test/*.xml'
+            junit allowEmptyResults: true, testResults: 'build/test-results/test/*.xml'
         }
-        // 스테이지 실행 여부와 관계없이 항상 정리
+        // 'always' 블록: 스테이지 실행 여부와 관계없이 항상 정리
         always {
             sh 'rm -f src/main/resources/firebase/serviceAccountKey.json'
             cleanWs() // 워크스페이스 정리
