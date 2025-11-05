@@ -28,24 +28,28 @@ pipeline {
         SONAR_TOKEN_CREDENTIALS_ID  = 'sonarqube-token' // SonarQube 토큰
     }
 
+    when {
+        not {
+            anyOf {
+                changeset pattern: '**/*.md', comparator: 'GLOB'
+                changeset pattern: 'docs/**', comparator: 'GLOB'
+                changeset pattern: '.github/**', comparator: 'GLOB'
+                changeset pattern: '.gitignore', comparator: 'GLOB'
+                changeset pattern: 'LICENSE', comparator: 'GLOB'
+            }
+        }
+    }
+
     stages {
         // === 1. Checkout ===
         stage('Checkout') {
-            // dev, main, PR일 때만 실행
+            dev, main, PR일 때만 실행
             when {
                 anyOf {
+                    branch 'chore/jenkins-test'
                     branch 'main'
                     branch 'dev'
                     changeRequest() // PR
-                }
-                not {
-                    anyOf {
-                        changeset pattern: '**/*.md', comparator: 'GLOB'
-                        changeset pattern: 'docs/**', comparator: 'GLOB'
-                        changeset pattern: '.github/**', comparator: 'GLOB'
-                        changeset pattern: '.gitignore', comparator: 'GLOB'
-                        changeset pattern: 'LICENSE', comparator: 'GLOB'
-                    }
                 }
             }
             steps {
@@ -65,6 +69,7 @@ pipeline {
             // dev, main, PR일 때만 실행
             when {
                 anyOf {
+                    branch 'chore/jenkins-test'
                     branch 'main'
                     branch 'dev'
                     changeRequest() // PR
@@ -83,6 +88,7 @@ pipeline {
             // dev, main, PR일 때만 실행
             when {
                 anyOf {
+                    branch 'chore/jenkins-test'
                     branch 'main'
                     branch 'dev'
                     changeRequest() // PR
@@ -109,6 +115,7 @@ pipeline {
             // dev, main, PR일 때만 실행
             when {
                 anyOf {
+                    branch 'chore/jenkins-test'
                     branch 'main'
                     branch 'dev'
                     changeRequest() // PR
@@ -137,6 +144,7 @@ pipeline {
         stage('Build & Push Docker Image') {
             // 'main' 브랜치일 때만 실행
             when {
+                branch 'chore/jenkins-test'
                 branch 'main'
             }
             steps {
@@ -163,6 +171,7 @@ pipeline {
         stage('Deploy to ECS') {
             // 'main' 브랜치일 때만 실행
             when {
+                branch 'chore/jenkins-test'
                 branch 'main'
             }
             steps {
@@ -187,8 +196,6 @@ pipeline {
                         def ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
                         def currentImageUri = "${ECR_REGISTRY}/${ECR_REPO_NAME}:${env.BUILD_NUMBER}"
                         echo "New Image URI to set: ${currentImageUri}"
-
-                        containerDefinitions[0].image = currentImageUri.toString()
 
                         // [SERVICE_NAME과 일치하는 컨테이너를 동적으로 찾기
                         def containerToUpdate = containerDefinitions.find { it.name == env.SERVICE_NAME }

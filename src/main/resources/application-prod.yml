@@ -25,4 +25,4 @@ management:
   endpoints:
     web:
       exposure:
-        include: health # prod 환경에서는 health만 노출
+        include: health
