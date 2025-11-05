@@ -72,7 +72,7 @@ pipeline {
                 // === 2. Prepare Test Env ===
                 stage('Prepare Test Env') {
                     steps {
-                        withCredentials([file(credentialsId: FCM_KEY_CREDENTIALS_ID, variable: 'FCM_KEY_FILE')]) {
+                        withCredentials([file(credentialsId: env.FCM_KEY_CREDENTIALS_ID, variable: 'FCM_KEY_FILE')]) {
                             sh 'mkdir -p src/main/resources/firebase'
                             sh 'cp $FCM_KEY_FILE src/main/resources/firebase/serviceAccountKey.json'
                         }
@@ -82,7 +82,7 @@ pipeline {
                 // === 3. Build, Test & Generate Reports ===
                 stage('Build, Test & Generate Reports') {
                     steps {
-                        withCredentials([usernamePassword(credentialsId: GPR_CREDENTIALS_ID, usernameVariable: 'GITHUB_ACTOR', passwordVariable: 'GITHUB_TOKEN')]) {
+                        withCredentials([usernamePassword(credentialsId: env.GPR_CREDENTIALS_ID, usernameVariable: 'GITHUB_ACTOR', passwordVariable: 'GITHUB_TOKEN')]) {
                             sh 'chmod +x ./gradlew'
                             sh '''
                             SPRING_PROFILES_ACTIVE=test \
@@ -98,7 +98,7 @@ pipeline {
                 stage('SonarQube Analysis') {
                     steps {
                         withSonarQubeEnv('SonarQube') {
-                            withCredentials([string(credentialsId: SONAR_TOKEN_CREDENTIALS_ID, variable: 'SONAR_TOKEN')]) {
+                            withCredentials([string(credentialsId: env.SONAR_TOKEN_CREDENTIALS_ID, variable: 'SONAR_TOKEN')]) {
                                 sh '''
                                 ./gradlew sonar \
                                 -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
@@ -154,10 +154,10 @@ pipeline {
                                 def imageTag = "${ECR_REGISTRY}/${ECR_REPO_NAME}:${env.BUILD_NUMBER}"  // 빌드 번호로 태그
                                 def latestTag = "${ECR_REGISTRY}/${ECR_REPO_NAME}:latest"
 
-                                sh "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}"
-                                sh "docker build -t ${imageTag} -t ${latestTag} ."
-                                sh "docker push ${imageTag}"
-                                sh "docker push ${latestTag}"
+                                sh 'aws ecr get-login-password --region ' + AWS_REGION + ' | docker login --username AWS --password-stdin ' + ECR_REGISTRY
+                                sh 'docker build -t ' + imageTag + ' -t ' + latestTag + ' .'
+                                sh 'docker push ' + imageTag
+                                sh 'docker push ' + latestTag
                             }
                         }
                     }
@@ -186,7 +186,7 @@ pipeline {
                                 // 빌드된 이미지 URI (예: 12345612345.dkr.ecr.ap-northeast-2.amazonaws.com/couponpop/member-service:17)
                                 def ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
                                 def currentImageUri = "${ECR_REGISTRY}/${ECR_REPO_NAME}:${env.BUILD_NUMBER}"
-                                echo "New Image URI to set: ${currentImageUri}"
+                                echo 'New Image URI to set: ' + currentImageUri
 
                                 def containerToUpdate = containerDefinitions.find { it.name == env.ECS_CONTAINER_NAME }
                                 if (!containerToUpdate) {
