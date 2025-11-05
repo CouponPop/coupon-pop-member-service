@@ -196,26 +196,28 @@ pipeline {
 
                         containerDefinitions[0].image = currentImageUri.toString()
 
-                        // 3. 새 Task Definition 등록에 필요한 다른 속성들 추출 및 정리
-                        def newTaskDefinitionPayload = [:]
-                        newTaskDefinitionPayload.family = taskDefJson.taskDefinition.family
-                        newTaskDefinitionPayload.containerDefinitions = containerDefinitions
-                        newTaskDefinitionPayload.networkMode = taskDefJson.taskDefinition.networkMode
-                        newTaskDefinitionPayload.cpu = taskDefJson.taskDefinition.cpu
-                        newTaskDefinitionPayload.memory = taskDefJson.taskDefinition.memory
-                        newTaskDefinitionPayload.requiresCompatibilities = taskDefJson.taskDefinition.requiresCompatibilities
+                        // [SERVICE_NAME과 일치하는 컨테이너를 동적으로 찾기
+                        def containerToUpdate = containerDefinitions.find { it.name == env.SERVICE_NAME }
+                        if (!containerToUpdate) {
+                            error "Container with name '${env.SERVICE_NAME}' not found in task definition '${ECS_TASK_DEFINITION_FAMILY}'."
+                        }
+                        containerToUpdate.image = currentImageUri.toString()
 
-                        if (taskDefJson.taskDefinition.taskRoleArn) {
-                            newTaskDefinitionPayload.taskRoleArn = taskDefJson.taskDefinition.taskRoleArn
-                        }
-                        if (taskDefJson.taskDefinition.executionRoleArn) {
-                            newTaskDefinitionPayload.executionRoleArn = taskDefJson.taskDefinition.executionRoleArn
-                        }
-                        if (taskDefJson.taskDefinition.volumes) {
-                            newTaskDefinitionPayload.volumes = taskDefJson.taskDefinition.volumes
-                        }
-                        if (taskDefJson.taskDefinition.tags) {
-                            newTaskDefinitionPayload.tags = taskDefJson.taskDefinition.tags
+                        // 3. 새 Task Definition 등록에 필요한 다른 속성들 추출 및 정리
+                        def newTaskDefinitionPayload = taskDefJson.taskDefinition
+
+                        // register-task-definition API에서 허용하지 않는 필드만 제거
+                        newTaskDefinitionPayload.remove('taskDefinitionArn')
+                        newTaskDefinitionPayload.remove('revision')
+                        newTaskDefinitionPayload.remove('status')
+                        newTaskDefinitionPayload.remove('requiresAttributes')
+                        newTaskDefinitionPayload.remove('compatibilities')
+                        newTaskDefinitionPayload.remove('registeredAt')    // (메타데이터 제거)
+                        newTaskDefinitionPayload.remove('registeredBy')   // (메TA데이터 제거)
+
+                        // describe-task-definition 결과의 최상위 'tags'를 payload에 추가
+                        if (taskDefJson.tags) {
+                            newTaskDefinitionPayload.tags = taskDefJson.tags
                         }
 
                         def taskDefFilePath = "new-task-definition.json"
