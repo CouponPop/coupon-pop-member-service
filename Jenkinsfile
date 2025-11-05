@@ -9,14 +9,12 @@ pipeline {
 
     // 환경 변수 정의
     environment {
-        // --- 서비스별 수정 필요 ---
-        SERVICE_NAME                = 'member-service' // 예: 'api-gateway', 'coupon-service'
+        // --- 서비스별 수정 필요 --- #❗서비스별로 SERVICE_NAME만 수정하면 됩니다. e.g: 'member-service', coupon-service'
+        SERVICE_NAME                = 'member-service'
         SONAR_PROJECT_KEY           = "couponpop-${SERVICE_NAME}"
 
         // --- 공통 (Jenkins EC2 IAM 역할이 권한을 가짐) ---
         AWS_REGION                  = 'ap-northeast-2'
-        AWS_ACCOUNT_ID              = '802318301972' // 본인 AWS 계정 ID로 변경
-        ECR_REGISTRY                = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
         ECR_REPO_NAME               = "couponpop/${SERVICE_NAME}"
         ECS_CLUSTER_NAME            = 'couponpop-ecs-cluster'
         ECS_SERVICE_NAME            = "${SERVICE_NAME}" // ECS 서비스 이름 확인
@@ -24,16 +22,39 @@ pipeline {
         SONAR_HOST_URL              = 'http://sonarqube:9000' // Jenkins 시스템 설정과 일치
 
         // --- Jenkins Credentials ID ---
+        AWS_ACCOUNT_ID_CREDENTIAL_ID = 'aws-account-id'
         GPR_CREDENTIALS_ID          = 'github-packages-token' // GitHub Packages 읽기용 PAT
         FCM_KEY_CREDENTIALS_ID      = 'fcm-service-account-key' // FCM 키 파일
         SONAR_TOKEN_CREDENTIALS_ID  = 'sonarqube-token' // SonarQube 토큰
     }
 
+    // changeset 평가를 위해 기본 checkout을 비활성화합니다.
+    options {
+        skipDefaultCheckout()
+    }
+
+    // 최상위 'when' 조건: 아래 유형의 파일만 변경된 경우 파이프라인을 실행하지 않습니다.
+    when {
+        not {
+            changeset "'**.md', 'docs/**', '.gitignore', '.github/ISSUE_TEMPLATE/**', 'LICENSE'"
+        }
+    }
+
     stages {
         // === 1. Checkout ===
         stage('Checkout') {
+            // dev, main, PR일 때만 실행
+            when {
+                anyOf {
+                    branch 'main'
+                    branch 'dev'
+                    changeRequest() // PR
+                }
+            }
             steps {
-                // Multibranch Pipeline이 자동으로 코드를 checkout 해줍니다.
+                // 수동으로 checkout 실행
+                checkout scm
+
                 script {
                     // PULL_REQUEST인 경우 PR 관련 변수 설정 (SonarQube 분석용)
                     if (env.CHANGE_ID) {
@@ -47,6 +68,14 @@ pipeline {
 
         // === 2. Prepare Test Env ===
         stage('Prepare Test Env') {
+            // dev, main, PR일 때만 실행
+            when {
+                anyOf {
+                    branch 'main'
+                    branch 'dev'
+                    changeRequest() // PR
+                }
+            }
             steps {
                 withCredentials([file(credentialsId: FCM_KEY_CREDENTIALS_ID, variable: 'FCM_KEY_FILE')]) {
                     sh 'mkdir -p src/main/resources/firebase'
@@ -55,8 +84,16 @@ pipeline {
             }
         }
 
-        // === 3. Build, Test & Generate Reports (모든 브랜치) ===
+        // === 3. Build, Test & Generate Reports ===
         stage('Build, Test & Generate Reports') {
+            // dev, main, PR일 때만 실행
+            when {
+                anyOf {
+                    branch 'main'
+                    branch 'dev'
+                    changeRequest() // PR
+                }
+            }
             steps {
                 withCredentials([usernamePassword(credentialsId: GPR_CREDENTIALS_ID, usernameVariable: 'GITHUB_ACTOR', passwordVariable: 'GITHUB_TOKEN')]) {
                     sh 'chmod +x ./gradlew'
@@ -73,16 +110,16 @@ pipeline {
             }
         }
 
-        stage('Debug: Check Libs') {
-            steps {
-                echo "--- build/libs/ 디렉토리 파일 목록 ---"
-                sh 'ls -l build/libs/'
-                echo "-----------------------------------"
-            }
-        }
-
-        // === 4. SonarQube Analysis (모든 브랜치) ===
+        // === 4. SonarQube Analysis ===
         stage('SonarQube Analysis') {
+            // dev, main, PR일 때만 실행
+            when {
+                anyOf {
+                    branch 'main'
+                    branch 'dev'
+                    changeRequest() // PR
+                }
+            }
             steps {
                 withSonarQubeEnv('SonarQube') {
                     withCredentials([string(credentialsId: SONAR_TOKEN_CREDENTIALS_ID, variable: 'SONAR_TOKEN')]) {
@@ -102,111 +139,118 @@ pipeline {
             }
         }
 
-        // === 5. Build & Push Docker Image (main 브랜치 푸시 시에만) ===
+        // === 5. Build & Push Docker Image ===
         stage('Build & Push Docker Image') {
+            // 'main' 브랜치일 때만 실행
             when {
-                // branch 'main' // (테스트 완료 후 'main'으로 변경)
-                branch 'chore/apply-jenkins'
+                branch 'main'
             }
             steps {
-                script {
-                    def imageTag = "${ECR_REGISTRY}/${ECR_REPO_NAME}:${env.BUILD_NUMBER}" // 빌드 번호로 태그
-                    def latestTag = "${ECR_REGISTRY}/${ECR_REPO_NAME}:latest"
+                withCredentials([string(credentialsId: AWS_ACCOUNT_ID_CREDENTIAL_ID, variable: 'AWS_ACCOUNT_ID')]) {
+                    script {
+                        def ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
-                    sh "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}"
+                        def imageTag = "${ECR_REGISTRY}/${ECR_REPO_NAME}:${env.BUILD_NUMBER}"  // 빌드 번호로 태그
+                        def latestTag = "${ECR_REGISTRY}/${ECR_REPO_NAME}:latest"
 
-                    // Dockerfile이 GPR에 접근하지 않으므로 withCredentials 및 build-arg 제거
-                    sh "docker build -t ${imageTag} -t ${latestTag} ."
+                        sh "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}"
 
-                    sh "docker push ${imageTag}"
-                    sh "docker push ${latestTag}"
+                        // Dockerfile이 GPR에 접근하지 않으므로 withCredentials 및 build-arg 사용하지 않음
+                        sh "docker build -t ${imageTag} -t ${latestTag} ."
+
+                        sh "docker push ${imageTag}"
+                        sh "docker push ${latestTag}"
+                    }
                 }
             }
         }
 
-        // === 6. Deploy to ECS (main 브랜치 푸시 시에만) ===
+        // === 6. Deploy to ECS ===
         stage('Deploy to ECS') {
+            // 'main' 브랜치일 때만 실행
             when {
-                // branch 'main' // (테스트 완료 후 'main'으로 변경)
-                branch 'chore/apply-jenkins'
+                branch 'main'
             }
             steps {
-                script {
-                    // 1. 현재 Task Definition 가져오기
-                    echo "ECS_TASK_DEFINITION_FAMILY: ${ECS_TASK_DEFINITION_FAMILY}"
-                    def currentTaskDef = sh(
-                        returnStdout: true,
-                        script: "aws ecs describe-task-definition --task-definition ${ECS_TASK_DEFINITION_FAMILY} --region ${AWS_REGION}"
-                    ).trim()
+                withCredentials([string(credentialsId: AWS_ACCOUNT_ID_CREDENTIAL_ID, variable: 'AWS_ACCOUNT_ID')]) {
+                    script {
+                        // 1. 현재 Task Definition 가져오기
+                        echo "ECS_TASK_DEFINITION_FAMILY: ${ECS_TASK_DEFINITION_FAMILY}"
+                        def currentTaskDef = sh(
+                            returnStdout: true,
+                            script: "aws ecs describe-task-definition --task-definition ${ECS_TASK_DEFINITION_FAMILY} --region ${AWS_REGION}"
+                        ).trim()
 
-                    // 2. 컨테이너 이미지 정의를 새 이미지 태그로 변경
-                    def taskDefJson = readJSON(text: currentTaskDef)
-                    def containerDefinitions = taskDefJson.taskDefinition.containerDefinitions
+                        // 2. 컨테이너 이미지 정의를 새 이미지 태그로 변경
+                        def taskDefJson = readJSON(text: currentTaskDef)
+                        def containerDefinitions = taskDefJson.taskDefinition.containerDefinitions
 
-                    if (containerDefinitions == null || containerDefinitions.isEmpty()) {
-                        error "Task Definition ${ECS_TASK_DEFINITION_FAMILY} has no containerDefinitions."
-                    }
+                        if (containerDefinitions == null || containerDefinitions.isEmpty()) {
+                            error "Task Definition ${ECS_TASK_DEFINITION_FAMILY} has no containerDefinitions."
+                        }
 
-                    // 빌드된 이미지 URI (예: 802318301972.dkr.ecr.ap-northeast-2.amazonaws.com/couponpop/member-service:17)
-                    def currentImageUri = "${ECR_REGISTRY}/${ECR_REPO_NAME}:${env.BUILD_NUMBER}"
-                    echo "New Image URI to set: ${currentImageUri}"
+                        // 빌드된 이미지 URI (예: 12345612345.dkr.ecr.ap-northeast-2.amazonaws.com/couponpop/member-service:17)
+                        def ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+                        def currentImageUri = "${ECR_REGISTRY}/${ECR_REPO_NAME}:${env.BUILD_NUMBER}"
+                        echo "New Image URI to set: ${currentImageUri}"
 
-                    containerDefinitions[0].image = currentImageUri.toString()
+                        containerDefinitions[0].image = currentImageUri.toString()
 
-                    // 3. 새 Task Definition 등록에 필요한 다른 속성들 추출 및 정리
-                    def newTaskDefinitionPayload = [:]
-                    newTaskDefinitionPayload.family = taskDefJson.taskDefinition.family
-                    newTaskDefinitionPayload.containerDefinitions = containerDefinitions
-                    newTaskDefinitionPayload.networkMode = taskDefJson.taskDefinition.networkMode
-                    newTaskDefinitionPayload.cpu = taskDefJson.taskDefinition.cpu
-                    newTaskDefinitionPayload.memory = taskDefJson.taskDefinition.memory
-                    newTaskDefinitionPayload.requiresCompatibilities = taskDefJson.taskDefinition.requiresCompatibilities
+                        // 3. 새 Task Definition 등록에 필요한 다른 속성들 추출 및 정리
+                        def newTaskDefinitionPayload = [:]
+                        newTaskDefinitionPayload.family = taskDefJson.taskDefinition.family
+                        newTaskDefinitionPayload.containerDefinitions = containerDefinitions
+                        newTaskDefinitionPayload.networkMode = taskDefJson.taskDefinition.networkMode
+                        newTaskDefinitionPayload.cpu = taskDefJson.taskDefinition.cpu
+                        newTaskDefinitionPayload.memory = taskDefJson.taskDefinition.memory
+                        newTaskDefinitionPayload.requiresCompatibilities = taskDefJson.taskDefinition.requiresCompatibilities
 
-                    if (taskDefJson.taskDefinition.taskRoleArn) {
-                        newTaskDefinitionPayload.taskRoleArn = taskDefJson.taskDefinition.taskRoleArn
-                    }
-                    if (taskDefJson.taskDefinition.executionRoleArn) {
-                        newTaskDefinitionPayload.executionRoleArn = taskDefJson.taskDefinition.executionRoleArn
-                    }
-                    if (taskDefJson.taskDefinition.volumes) {
-                        newTaskDefinitionPayload.volumes = taskDefJson.taskDefinition.volumes
-                    }
-                    if (taskDefJson.taskDefinition.tags) {
-                        newTaskDefinitionPayload.tags = taskDefJson.taskDefinition.tags
-                    }
+                        if (taskDefJson.taskDefinition.taskRoleArn) {
+                            newTaskDefinitionPayload.taskRoleArn = taskDefJson.taskDefinition.taskRoleArn
+                        }
+                        if (taskDefJson.taskDefinition.executionRoleArn) {
+                            newTaskDefinitionPayload.executionRoleArn = taskDefJson.taskDefinition.executionRoleArn
+                        }
+                        if (taskDefJson.taskDefinition.volumes) {
+                            newTaskDefinitionPayload.volumes = taskDefJson.taskDefinition.volumes
+                        }
+                        if (taskDefJson.taskDefinition.tags) {
+                            newTaskDefinitionPayload.tags = taskDefJson.taskDefinition.tags
+                        }
 
-                    def taskDefFilePath = "new-task-definition.json"
-                    writeJSON(file: taskDefFilePath, json: newTaskDefinitionPayload, pretty: 1)
-                    echo "New Task Definition Payload written to ${taskDefFilePath}"
+                        def taskDefFilePath = "new-task-definition.json"
+                        writeJSON(file: taskDefFilePath, json: newTaskDefinitionPayload, pretty: 1)
+                        echo "New Task Definition Payload written to ${taskDefFilePath}"
 
-                    def newTaskDef = sh(
-                        returnStdout: true,
-                        script: """
-                            aws ecs register-task-definition \
-                            --cli-input-json "file://${taskDefFilePath}" \
-                            --region ${AWS_REGION}
+                        def newTaskDef = sh(
+                            returnStdout: true,
+                            script: """
+                                aws ecs register-task-definition \
+                                --cli-input-json "file://${taskDefFilePath}" \
+                                --region ${AWS_REGION}
+                            """
+                        ).trim()
+
+                        def newTaskDefArn = readJSON(text: newTaskDef).taskDefinition.taskDefinitionArn
+                        echo "Registered new Task Definition: ${newTaskDefArn}"
+
+                        // 4. 새 Task Definition 이용하여 업데이트
+                        sh """
+                        aws ecs update-service \
+                          --cluster ${ECS_CLUSTER_NAME} \
+                          --service ${ECS_SERVICE_NAME} \
+                          --task-definition ${newTaskDefArn} \
+                          --region ${AWS_REGION}
                         """
-                    ).trim()
 
-                    def newTaskDefArn = readJSON(text: newTaskDef).taskDefinition.taskDefinitionArn
-                    echo "Registered new Task Definition: ${newTaskDefArn}"
-
-                    // 4. 새 Task Definition 이용하여 업데이트
-                    sh """
-                    aws ecs update-service \
-                      --cluster ${ECS_CLUSTER_NAME} \
-                      --service ${ECS_SERVICE_NAME} \
-                      --task-definition ${newTaskDefArn} \
-                      --region ${AWS_REGION}
-                    """
-
-                    sh """
-                    echo "Waiting for service ${ECS_SERVICE_NAME} to stabilize..."
-                    aws ecs wait services-stable \
-                      --cluster ${ECS_CLUSTER_NAME} \
-                      --service ${ECS_SERVICE_NAME} \
-                      --region ${AWS_REGION}
-                    """
+                        sh """
+                        echo "Waiting for service ${ECS_SERVICE_NAME} to stabilize..."
+                        aws ecs wait services-stable \
+                          --cluster ${ECS_CLUSTER_NAME} \
+                          --service ${ECS_SERVICE_NAME} \
+                          --region ${AWS_REGION}
+                        """
+                    }
                 }
             }
         }
