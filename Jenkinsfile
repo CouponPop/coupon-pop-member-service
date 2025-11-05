@@ -39,7 +39,6 @@ pipeline {
                     anyOf {
                         branch 'main'
                         branch 'dev'
-                        branch 'chore/jenkins-test' // [테스트 브랜치 추가]
                         changeRequest() // PR
                     }
                     // 조건 2: 빌드 필요 파일이 변경되었을 때
@@ -129,7 +128,7 @@ pipeline {
                     // 조건 1: 'main' 브랜치 또는 '테스트 브랜치'일 때
                     anyOf {
                         branch 'main'
-                        branch 'chore/jenkins-test' // [테스트 브랜치 추가]
+                        branch 'dev' // TODO: 테스트 이후에는 제거
                     }
                     // 조건 2: 빌드 필요 파일이 변경되었을 때
                     anyOf {
