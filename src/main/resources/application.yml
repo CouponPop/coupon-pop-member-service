@@ -29,11 +29,6 @@ spring:
     validate-on-migrate: true
     clean-disabled: true
 
-client:
-  notification-service:
-    name: notification-service
-    url: http://localhost:8084
-
 jwt:
   secret:
     key: ${JWT_SECRET_KEY}
