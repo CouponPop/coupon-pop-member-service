@@ -43,14 +43,15 @@ pipeline {
     stages {
         // === 1. Checkout ===
         stage('Checkout') {
-            // dev, main, PR일 때만 실행
-//             when {
-//                 anyOf {
-//                     branch 'main'
-//                     branch 'dev'
-//                     changeRequest() // PR
-//                 }
-//             }
+            dev, main, PR일 때만 실행
+            when {
+                anyOf {
+                    branch 'chore/jenkins-test'
+                    branch 'main'
+                    branch 'dev'
+                    changeRequest() // PR
+                }
+            }
             steps {
                 script {
                     // PULL_REQUEST인 경우 PR 관련 변수 설정 (SonarQube 분석용)
@@ -68,6 +69,7 @@ pipeline {
             // dev, main, PR일 때만 실행
             when {
                 anyOf {
+                    branch 'chore/jenkins-test'
                     branch 'main'
                     branch 'dev'
                     changeRequest() // PR
@@ -84,13 +86,14 @@ pipeline {
         // === 3. Build, Test & Generate Reports ===
         stage('Build, Test & Generate Reports') {
             // dev, main, PR일 때만 실행
-//             when {
-//                 anyOf {
-//                     branch 'main'
-//                     branch 'dev'
-//                     changeRequest() // PR
-//                 }
-//             }
+            when {
+                anyOf {
+                    branch 'chore/jenkins-test'
+                    branch 'main'
+                    branch 'dev'
+                    changeRequest() // PR
+                }
+            }
             steps {
                 withCredentials([usernamePassword(credentialsId: GPR_CREDENTIALS_ID, usernameVariable: 'GITHUB_ACTOR', passwordVariable: 'GITHUB_TOKEN')]) {
                     sh 'chmod +x ./gradlew'
@@ -110,13 +113,14 @@ pipeline {
         // === 4. SonarQube Analysis ===
         stage('SonarQube Analysis') {
             // dev, main, PR일 때만 실행
-//             when {
-//                 anyOf {
-//                     branch 'main'
-//                     branch 'dev'
-//                     changeRequest() // PR
-//                 }
-//             }
+            when {
+                anyOf {
+                    branch 'chore/jenkins-test'
+                    branch 'main'
+                    branch 'dev'
+                    changeRequest() // PR
+                }
+            }
             steps {
                 withSonarQubeEnv('SonarQube') {
                     withCredentials([string(credentialsId: SONAR_TOKEN_CREDENTIALS_ID, variable: 'SONAR_TOKEN')]) {
@@ -139,9 +143,10 @@ pipeline {
         // === 5. Build & Push Docker Image ===
         stage('Build & Push Docker Image') {
             // 'main' 브랜치일 때만 실행
-//             when {
-//                 branch 'main'
-//             }
+            when {
+                branch 'chore/jenkins-test'
+                branch 'main'
+            }
             steps {
                 withCredentials([string(credentialsId: AWS_ACCOUNT_ID_CREDENTIAL_ID, variable: 'AWS_ACCOUNT_ID')]) {
                     script {
@@ -165,9 +170,10 @@ pipeline {
         // === 6. Deploy to ECS ===
         stage('Deploy to ECS') {
             // 'main' 브랜치일 때만 실행
-//             when {
-//                 branch 'main'
-//             }
+            when {
+                branch 'chore/jenkins-test'
+                branch 'main'
+            }
             steps {
                 withCredentials([string(credentialsId: AWS_ACCOUNT_ID_CREDENTIAL_ID, variable: 'AWS_ACCOUNT_ID')]) {
                     script {
