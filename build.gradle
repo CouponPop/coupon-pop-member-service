@@ -125,7 +125,7 @@ dependencies {
     implementation 'com.couponpop:couponpop-security:0.0.1-SNAPSHOT'
 
     // [CouponPop Core Module]
-    implementation 'com.couponpop:couponpop-core:0.0.2-SNAPSHOT'
+    implementation 'com.couponpop:couponpop-core:0.0.5-SNAPSHOT'
 
     // [DB]
     runtimeOnly 'com.mysql:mysql-connector-j'
@@ -158,6 +158,9 @@ dependencies {
 
     testImplementation 'org.testcontainers:testcontainers'
     testImplementation 'org.testcontainers:junit-jupiter'
+
+    // [Micrometer Prometheus Registry]
+    implementation 'io.micrometer:micrometer-registry-prometheus'
 }
 
 tasks.named('test') {
