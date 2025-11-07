@@ -13,7 +13,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 
 @Slf4j
 @Configuration
-public class OpenFeignConfig {
+public class UserFeignConfig {
 
     /**
      * Feign Client 요청 시 JWT 토큰을 자동으로 헤더에 추가하는 인터셉터
