@@ -122,10 +122,10 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
 
     // [CouponPop Security Module]
-    implementation 'com.couponpop:couponpop-security:0.0.1-SNAPSHOT'
+    implementation 'com.couponpop:couponpop-security:0.0.3-SNAPSHOT'
 
     // [CouponPop Core Module]
-    implementation 'com.couponpop:couponpop-core:0.0.5-SNAPSHOT'
+    implementation 'com.couponpop:couponpop-core:0.0.7-SNAPSHOT'
 
     // [DB]
     runtimeOnly 'com.mysql:mysql-connector-j'
