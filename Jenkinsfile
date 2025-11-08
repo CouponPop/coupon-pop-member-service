@@ -111,7 +111,7 @@ pipeline {
             } // 'CI' 하위 stages 끝
         } // 'CI' 상위 stage 끝
         // === 'Deploy' 상위 스테이지 ===
-     stage('Deploy to Production') {
+    stage('Deploy to Production') {
          when {
              anyOf {
                  branch 'main'
@@ -124,16 +124,18 @@ pipeline {
          stages {
 
              // === 5. Build & Push Docker Image ===
-             stage('Build & Push Docker Image') {
-                 steps {
-                     // [수정됨] withCredentials 블록을 하위 스테이지로 다시 이동
-                     withCredentials([string(credentialsId: env.AWS_ACCOUNT_ID_CREDENTIALS_ID, variable: 'AWS_ACCOUNT_ID')]) {
-                         script {
-                             // ECR_REGISTRY_URI_PREFIX를 이 블록 안에서 안전하게 할당
-                             env.ECR_REGISTRY_URI_PREFIX = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+            stage('Build & Push Docker Image') {
+                steps {
+                    withCredentials([string(credentialsId: env.AWS_ACCOUNT_ID_CREDENTIALS_ID, variable: 'AWS_ACCOUNT_ID')]) {
+                        script {
+                            // [추가] 변수 값 자체를 디버깅
+                            if (AWS_ACCOUNT_ID == null || AWS_ACCOUNT_ID.isEmpty()) {
+                                error "FATAL: 'aws-account-id' credential secret is empty or null!"
+                            }
 
-                             echo "ECR Registry: ${env.ECR_REGISTRY_URI_PREFIX}"
-
+                            // 안전하게 재할당
+                            env.ECR_REGISTRY_URI_PREFIX = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+                            echo "ECR Registry: ${env.ECR_REGISTRY_URI_PREFIX}"
                              def imageTag = "${env.ECR_REGISTRY_URI_PREFIX}/${env.ECR_REPO_NAME}:${env.BUILD_NUMBER}"
                              def latestTag = "${env.ECR_REGISTRY_URI_PREFIX}/${env.ECR_REPO_NAME}:latest"
 
@@ -147,7 +149,7 @@ pipeline {
              }
 
              // === 6. Deploy to ECS (Blue/Green 반영) ===
-             stage('Deploy to ECS') {
+            stage('Deploy to ECS') {
                  steps {
                      // [수정됨] withCredentials 블록을 하위 스테이지로 다시 이동
                      withCredentials([string(credentialsId: env.AWS_ACCOUNT_ID_CREDENTIALS_ID, variable: 'AWS_ACCOUNT_ID')]) {
