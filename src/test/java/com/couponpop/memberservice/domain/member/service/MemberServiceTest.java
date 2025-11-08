@@ -1,7 +1,6 @@
 package com.couponpop.memberservice.domain.member.service;
 
 
-import com.couponpop.memberservice.common.exception.GlobalException;
 import com.couponpop.memberservice.domain.auth.exception.AuthErrorCode;
 import com.couponpop.memberservice.domain.member.dto.request.MemberProfileUpdateRequest;
 import com.couponpop.memberservice.domain.member.dto.response.MemberProfileResponse;
@@ -9,6 +8,7 @@ import com.couponpop.memberservice.domain.member.entity.Member;
 import com.couponpop.memberservice.domain.member.enums.MemberType;
 import com.couponpop.memberservice.domain.member.exception.MemberErrorCode;
 import com.couponpop.memberservice.domain.member.repository.MemberRepository;
+import com.couponpop.memberservice.global.exception.GlobalException;
 import com.couponpop.memberservice.utils.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

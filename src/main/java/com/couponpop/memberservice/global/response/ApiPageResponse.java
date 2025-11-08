@@ -1,4 +1,4 @@
-package com.couponpop.memberservice.common.response;
+package com.couponpop.memberservice.global.response;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;

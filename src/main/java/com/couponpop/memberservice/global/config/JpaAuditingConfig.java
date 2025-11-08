@@ -1,4 +1,4 @@
-package com.couponpop.memberservice.common.config;
+package com.couponpop.memberservice.global.config;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;

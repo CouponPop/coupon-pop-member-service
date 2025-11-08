@@ -1,7 +1,7 @@
-package com.couponpop.memberservice.common.exception;
+package com.couponpop.memberservice.global.exception;
 
 
-import com.couponpop.memberservice.common.response.ApiErrorResponse;
+import com.couponpop.memberservice.global.response.ApiErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.support.DefaultMessageSourceResolvable;

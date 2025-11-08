@@ -1,4 +1,4 @@
-package com.couponpop.memberservice.common.exception;
+package com.couponpop.memberservice.global.exception;
 
 import lombok.Getter;
 

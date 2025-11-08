@@ -1,4 +1,4 @@
-package com.couponpop.memberservice.common.entity;
+package com.couponpop.memberservice.global.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.EntityListeners;
