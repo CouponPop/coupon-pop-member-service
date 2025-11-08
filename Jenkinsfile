@@ -125,8 +125,11 @@ pipeline {
                     steps {
                         withCredentials([string(credentialsId: env.AWS_ACCOUNT_ID_CREDENTIALS_ID, variable: 'AWS_ACCOUNT_ID')]) {
                             script {
-                                // ECR 레지스트리 URI를 환경 변수에 저장
+                                echo "Using AWS Account ID: ${AWS_ACCOUNT_ID}"
+
+                                // 안전하게 재할당
                                 env.ECR_REGISTRY_URI_PREFIX = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+                                echo "ECR Registry: ${env.ECR_REGISTRY_URI_PREFIX}"
 
                                 def imageTag = "${env.ECR_REGISTRY_URI_PREFIX}/${env.ECR_REPO_NAME}:${env.BUILD_NUMBER}"
                                 def latestTag = "${env.ECR_REGISTRY_URI_PREFIX}/${env.ECR_REPO_NAME}:latest"
