@@ -124,41 +124,31 @@ pipeline {
          stages {
 
              // === 5. Build & Push Docker Image ===
-               stage('Build & Push Docker Image') {
-                   steps {
-                       withCredentials([string(credentialsId: env.AWS_ACCOUNT_ID_CREDENTIALS_ID, variable: 'AWS_ACCOUNT_ID')]) {
-                           script {
-                               // === 디버그 ===
-                               echo "Credential ID: ${env.AWS_ACCOUNT_ID_CREDENTIALS_ID}"
-                               echo "AWS_ACCOUNT_ID raw env value: ${env.AWS_ACCOUNT_ID ?: 'NULL'}"
+                stage('Build & Push Docker Image') {
+                    steps {
+                        withCredentials([string(credentialsId: env.AWS_ACCOUNT_ID_CREDENTIALS_ID, variable: 'AWS_ACCOUNT_ID')]) {
+                            script {
+                                // [수정] env.ECR_REGISTRY_URI_PREFIX 대신 'def'로 로컬 변수 선언
+                                def ecrRegistryUri = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
-                               // === 수정 핵심 ===
-                               if (!env.AWS_ACCOUNT_ID?.trim()) {
-                                   error "FATAL: AWS_ACCOUNT_ID credential is missing or empty!"
-                               }
+                                echo "ECR Registry: ${ecrRegistryUri}" // 디버깅용
 
-                               // Jenkins env context에서 직접 접근
-                               env.ECR_REGISTRY_URI_PREFIX = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com"
+                                // [수정] 로컬 변수를 사용하여 이미지 태그 정의
+                                def imageTag = "${ecrRegistryUri}/${env.ECR_REPO_NAME}:${env.BUILD_NUMBER}"
+                                def latestTag = "${ecrRegistryUri}/${env.ECR_REPO_NAME}:latest"
 
-                               echo "✅ ECR Registry: ${env.ECR_REGISTRY_URI_PREFIX}"
-
-                               def imageTag = "${env.ECR_REGISTRY_URI_PREFIX}/${env.ECR_REPO_NAME}:${env.BUILD_NUMBER}"
-                               def latestTag = "${env.ECR_REGISTRY_URI_PREFIX}/${env.ECR_REPO_NAME}:latest"
-
-                               sh """
-                                   set -e
-                                   echo '🔐 Logging into ECR...'
-                                   aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY_URI_PREFIX
-                                   echo '🏗️  Building image...'
-                                   docker build -t $imageTag -t $latestTag .
-                                   echo '📤 Pushing image...'
-                                   docker push $imageTag
-                                   docker push $latestTag
-                               """
-                           }
-                       }
-                   }
-               }
+                                // [수정] sh 명령어를 큰따옴표(GString)로 변경하여
+                                // ecrRegistryUri, imageTag, latestTag 변수를 올바르게 주입
+                                sh """
+                                    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ecrRegistryUri}
+                                    docker build -t ${imageTag} -t ${latestTag} .
+                                    docker push ${imageTag}
+                                    docker push ${latestTag}
+                                """
+                            }
+                        }
+                    }
+                }
 
              // === 6. Deploy to ECS (Blue/Green 반영) ===
             stage('Deploy to ECS') {
