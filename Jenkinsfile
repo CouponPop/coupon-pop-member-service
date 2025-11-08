@@ -9,24 +9,29 @@ pipeline {
 
     // 환경 변수 정의
     environment {
-        // --- 서비스별 수정 필요 --- #❗서비스별로 SERVICE_NAME, ECS_CONTAINER_NAME만 수정하면 됩니다. e.g: 'member-service', 'member'
+        // --- 서비스별 수정 필요 --- #❗서비스별로 SERVICE_NAME, ECS_CONTAINER_NAME만 수정하면 됩니다.
         SERVICE_NAME                = 'member-service'
         ECS_CONTAINER_NAME          = 'member'
         SONAR_PROJECT_KEY           = "couponpop-${SERVICE_NAME}"
 
-        // --- 공통 (Jenkins EC2 IAM 역할이 권한을 가짐) ---
+        // --- AWS 변수 (B/G 스크립트에서 사용) ---
         AWS_REGION                  = 'ap-northeast-2'
         ECR_REPO_NAME               = "couponpop/${SERVICE_NAME}"
         ECS_CLUSTER_NAME            = 'couponpop-ecs-cluster'
-        ECS_SERVICE_NAME            = "${SERVICE_NAME}" // ECS 서비스 이름 확인
-        ECS_TASK_DEFINITION_FAMILY  = "couponpop-${SERVICE_NAME}-task-definition" // Task Def Family 확인
-        SONAR_HOST_URL              = 'http://sonarqube:9000' // Jenkins 시스템 설정과 일치
+        ECS_SERVICE_NAME            = "${SERVICE_NAME}"
+        ECS_TASK_DEFINITION_FAMILY  = "couponpop-${SERVICE_NAME}-task-definition"
+
+        // ECR 전체 URI (빌드 후 ECR 레지스트리 경로)
+        // [수정됨]: AWS_ACCOUNT_ID 변수를 사용하여 ECR 전체 URI를 동적으로 구성할 준비를 합니다.
+        ECR_REGISTRY_URI_PREFIX     = '' // <--- Step 5에서 AWS_ACCOUNT_ID로 채워짐
 
         // --- Jenkins Credentials ID ---
         AWS_ACCOUNT_ID_CREDENTIALS_ID = 'aws-account-id'
-        GPR_CREDENTIALS_ID          = 'github-packages-token' // GitHub Packages 읽기용 PAT
-        FCM_KEY_CREDENTIALS_ID      = 'fcm-service-account-key' // FCM 키 파일
-        SONAR_TOKEN_CREDENTIALS_ID  = 'sonarqube-token' // SonarQube 토큰
+        GPR_CREDENTIALS_ID          = 'github-packages-token'
+        FCM_KEY_CREDENTIALS_ID      = 'fcm-service-account-key'
+        SONAR_TOKEN_CREDENTIALS_ID  = 'sonarqube-token'
+
+        SONAR_HOST_URL              = 'http://sonarqube:9000'
     }
 
     stages {
@@ -34,23 +39,12 @@ pipeline {
         // === 'CI' 상위 스테이지 ===
         stage('CI') {
             when {
-                allOf {
-                    // 조건 1: dev, main, PR 그리고 '테스트 브랜치'일 때
-                    anyOf {
-                        branch 'main'
-                        branch 'dev'
-                        changeRequest() // PR
-                    }
-                    // 조건 2: 빌드 필요 파일이 변경되었을 때
-                    anyOf {
-                        changeset pattern: 'src/**', comparator: 'GLOB'
-                        changeset pattern: 'build.gradle', comparator: 'GLOB'
-                        changeset pattern: 'settings.gradle', comparator: 'GLOB'
-                        changeset pattern: 'gradlew', comparator: 'GLOB'
-                        changeset pattern: 'gradle/**', comparator: 'GLOB'
-                        changeset pattern: 'Jenkinsfile', comparator: 'GLOB'
-                        changeset pattern: 'Dockerfile', comparator: 'GLOB'
-                    }
+                // [수정됨]: changeset 조건을 제거하여 트리거 민감도를 낮춤 (Jenkins가 작동하는지 확인용)
+                anyOf {
+                    branch 'main'
+                    branch 'dev'
+                    branch 'feat/apply-new-jenkins'
+                    changeRequest()
                 }
             }
             stages {
@@ -106,9 +100,6 @@ pipeline {
                                 -Dsonar.host.url=${SONAR_HOST_URL} \
                                 -Dsonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco/test/jacocoTestReport.xml
                                 '''
-                                // GHA와 달리 Jenkins는 localhost에서 Redis, Elasticsearch를 자동 실행하지 않습니다.
-                                // 이 테스트가 성공하려면 Jenkins 실행 환경에 Redis/Elasticsearch가 있거나,
-                                // Testcontainers를 사용하도록 build.gradle이 설정되어야 합니다.
                             }
                         }
                         timeout(time: 5, unit: 'MINUTES') {
@@ -119,27 +110,12 @@ pipeline {
 
             } // 'CI' 하위 stages 끝
         } // 'CI' 상위 stage 끝
-
-
         // === 'Deploy' 상위 스테이지 ===
         stage('Deploy to Production') {
             when {
-                allOf {
-                    // 조건 1: 'main' 브랜치 또는 '테스트 브랜치'일 때
-                    anyOf {
-                        branch 'main'
-                        branch 'dev' // TODO: 테스트 이후에는 제거
-                    }
-                    // 조건 2: 빌드 필요 파일이 변경되었을 때
-                    anyOf {
-                        changeset pattern: 'src/**', comparator: 'GLOB'
-                        changeset pattern: 'build.gradle', comparator: 'GLOB'
-                        changeset pattern: 'settings.gradle', comparator: 'GLOB'
-                        changeset pattern: 'gradlew', comparator: 'GLOB'
-                        changeset pattern: 'gradle/**', comparator: 'GLOB'
-                        changeset pattern: 'Jenkinsfile', comparator: 'GLOB'
-                        changeset pattern: 'Dockerfile', comparator: 'GLOB'
-                    }
+                anyOf {
+                    branch 'main'
+                    branch 'feat/apply-new-jenkins'
                 }
             }
             stages {
@@ -149,11 +125,13 @@ pipeline {
                     steps {
                         withCredentials([string(credentialsId: env.AWS_ACCOUNT_ID_CREDENTIALS_ID, variable: 'AWS_ACCOUNT_ID')]) {
                             script {
-                                def ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-                                def imageTag = "${ECR_REGISTRY}/${ECR_REPO_NAME}:${env.BUILD_NUMBER}"  // 빌드 번호로 태그
-                                def latestTag = "${ECR_REGISTRY}/${ECR_REPO_NAME}:latest"
+                                // ECR 레지스트리 URI를 환경 변수에 저장
+                                env.ECR_REGISTRY_URI_PREFIX = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
-                                sh 'aws ecr get-login-password --region ' + AWS_REGION + ' | docker login --username AWS --password-stdin ' + ECR_REGISTRY
+                                def imageTag = "${env.ECR_REGISTRY_URI_PREFIX}/${env.ECR_REPO_NAME}:${env.BUILD_NUMBER}"
+                                def latestTag = "${env.ECR_REGISTRY_URI_PREFIX}/${env.ECR_REPO_NAME}:latest"
+
+                                sh 'aws ecr get-login-password --region ' + AWS_REGION + ' | docker login --username AWS --password-stdin ' + env.ECR_REGISTRY_URI_PREFIX
                                 sh 'docker build -t ' + imageTag + ' -t ' + latestTag + ' .'
                                 sh 'docker push ' + imageTag
                                 sh 'docker push ' + latestTag
@@ -162,84 +140,105 @@ pipeline {
                     }
                 }
 
-                // === 6. Deploy to ECS ===
+                // === 6. Deploy to ECS (Blue/Green 반영) ===
                 stage('Deploy to ECS') {
                     steps {
+                        // AWS CLI와 jq가 Jenkins 환경에서 사용 가능해야 합니다.
                         withCredentials([string(credentialsId: env.AWS_ACCOUNT_ID_CREDENTIALS_ID, variable: 'AWS_ACCOUNT_ID')]) {
                             script {
-                                // 1. 현재 Task Definition 가져오기
-                                echo "ECS_TASK_DEFINITION_FAMILY: ${ECS_TASK_DEFINITION_FAMILY}"
-                                def currentTaskDef = sh(
-                                    returnStdout: true,
-                                    script: "aws ecs describe-task-definition --task-definition ${ECS_TASK_DEFINITION_FAMILY} --region ${AWS_REGION}"
-                                ).trim()
-
-                                // 2. 컨테이너 이미지 정의를 새 이미지 태그로 변경
-                                def taskDefJson = readJSON(text: currentTaskDef)
-                                def containerDefinitions = taskDefJson.taskDefinition.containerDefinitions
-
-                                if (containerDefinitions == null || containerDefinitions.isEmpty()) {
-                                    error "Task Definition ${ECS_TASK_DEFINITION_FAMILY} has no containerDefinitions."
-                                }
-
-                                // 빌드된 이미지 URI (예: 12345612345.dkr.ecr.ap-northeast-2.amazonaws.com/couponpop/member-service:17)
-                                def ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-                                def currentImageUri = "${ECR_REGISTRY}/${ECR_REPO_NAME}:${env.BUILD_NUMBER}"
-                                echo 'New Image URI to set: ' + currentImageUri
-
-                                def containerToUpdate = containerDefinitions.find { it.name == env.ECS_CONTAINER_NAME }
-                                if (!containerToUpdate) {
-                                    error "Container with name '${env.ECS_CONTAINER_NAME}' not found in task definition '${ECS_TASK_DEFINITION_FAMILY}'."
-                                }
-                                containerToUpdate.image = currentImageUri.toString()
-
-                                // 3. 새 Task Definition 등록에 필요한 페이로드 생성
-                                def newTaskDefinitionPayload = taskDefJson.taskDefinition
-
-                                newTaskDefinitionPayload.remove('taskDefinitionArn')
-                                newTaskDefinitionPayload.remove('revision')
-                                newTaskDefinitionPayload.remove('status')
-                                newTaskDefinitionPayload.remove('requiresAttributes')
-                                newTaskDefinitionPayload.remove('compatibilities')
-                                newTaskDefinitionPayload.remove('registeredAt')
-                                newTaskDefinitionPayload.remove('registeredBy')
-
-                                // describe-task-definition 결과의 최상위 'tags'를 payload에 추가
-                                if (taskDefJson.tags) {
-                                    newTaskDefinitionPayload.tags = taskDefJson.tags
-                                }
-
-                                def taskDefFilePath = "new-task-definition.json"
-                                writeJSON(file: taskDefFilePath, json: newTaskDefinitionPayload, pretty: 1)
-                                echo "New Task Definition Payload written to ${taskDefFilePath}"
-
-                                def newTaskDef = sh(
-                                    returnStdout: true,
-                                    script: """
-                                        aws ecs register-task-definition \
-                                        --cli-input-json "file://${taskDefFilePath}" \
-                                        --region ${AWS_REGION}
-                                    """
-                                ).trim()
-
-                                def newTaskDefArn = readJSON(text: newTaskDef).taskDefinition.taskDefinitionArn
-                                echo "Registered new Task Definition: ${newTaskDefArn}"
-
-                                // 4. 새 Task Definition 이용하여 업데이트
                                 sh """
+                                # sh 블록 시작 시 set -e (오류 발생 시 즉시 중단)를 설정합니다.
+                                set -e
+
+                                # ===========================================
+                                # Blue/Green Deployment Script (AWS 가이드 기반)
+                                # ===========================================
+                                # 환경 변수 설정 (Jenkins ENV 사용)
+                                CLUSTER_NAME="${ECS_CLUSTER_NAME}"
+                                SERVICE_NAME="${ECS_SERVICE_NAME}"
+                                TASK_DEFINITION_FAMILY="${ECS_TASK_DEFINITION_FAMILY}"
+                                # ECR_REPOSITORY_URI는 이미 ECR_REGISTRY_URI_PREFIX와 ECR_REPO_NAME로 구성됨
+                                IMAGE_URI="${ECR_REGISTRY_URI_PREFIX}/${ECR_REPO_NAME}:${BUILD_NUMBER}"
+                                REGION="${AWS_REGION}"
+
+                                echo "=========================================="
+                                echo "Starting Blue/Green Deployment"
+                                echo "Cluster: \${CLUSTER_NAME}"
+                                echo "Service: \${SERVICE_NAME}"
+                                echo "New Image: \${IMAGE_URI}"
+                                echo "=========================================="
+
+                                # 1. 현재 태스크 정의 가져오기
+                                echo "📋 Retrieving current task definition..."
+                                CURRENT_TASK_DEF=\$(aws ecs describe-task-definition \
+                                    --task-definition \${TASK_DEFINITION_FAMILY} \
+                                    --region \${REGION} \
+                                    --query 'taskDefinition')
+
+                                # 2. 새 태스크 정의 생성 및 업데이트
+                                echo "🔄 Creating new task definition..."
+                                NEW_TASK_DEF=\$(echo \${CURRENT_TASK_DEF} | jq --arg IMAGE "\${IMAGE_URI}" '
+                                    .containerDefinitions[0].image = \$IMAGE |
+                                    del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy)')
+
+                                # 3. 새 태스크 정의 등록
+                                echo "📝 Registering new task definition..."
+                                NEW_TASK_DEF_ARN=\$(aws ecs register-task-definition \
+                                    --region \${REGION} \
+                                    --cli-input-json "\${NEW_TASK_DEF}" \
+                                    --query 'taskDefinition.taskDefinitionArn' \
+                                    --output text)
+                                echo "✅ New task definition: \${NEW_TASK_DEF_ARN}"
+
+                                # 4. 블루/그린 배포 시작
+                                echo "🚀 Starting blue/green deployment..."
+                                # deploymentCircuitBreaker를 비활성화하고 bakeTimeInMinutes를 5분으로 설정
                                 aws ecs update-service \
-                                  --cluster ${ECS_CLUSTER_NAME} \
-                                  --service ${ECS_SERVICE_NAME} \
-                                  --task-definition ${newTaskDefArn} \
-                                  --region ${AWS_REGION}
-                                """
+                                    --cluster \${CLUSTER_NAME} \
+                                    --service \${SERVICE_NAME} \
+                                    --task-definition \${NEW_TASK_DEF_ARN} \
+                                    --force-new-deployment \
+                                    --deployment-configuration '{
+                                        "deploymentCircuitBreaker": {
+                                            "enable": false
+                                        },
+                                        "blueGreenDeployment": {
+                                            "strategy": "BLUE_GREEN",
+                                            "bakeTimeInMinutes": 5
+                                        }
+                                    }' \
+                                    --region \${REGION} > /dev/null
 
-                                sh """
-                                echo "Waiting for service ${ECS_SERVICE_NAME} to stabilize..."
-                                aws ecs wait services-stable \
-                                  --cluster ${ECS_CLUSTER_NAME} \
-                                  --service ${ECS_SERVICE_NAME} \
-                                  --region ${AWS_REGION}
+                                # 5. 배포 모니터링 및 완료 대기
+                                echo "👀 Monitoring deployment (max 30 minutes)..."
+                                TIMEOUT=1800  # 30분 타임아웃 (AWS 가이드 유지)
+                                ELAPSED=0
+                                while [ \${ELAPSED} -lt \${TIMEOUT} ]; do
+                                    SERVICE_INFO=\$(aws ecs describe-services \
+                                        --cluster \${CLUSTER_NAME} \
+                                        --services \${SERVICE_NAME} \
+                                        --region \${REGION} \
+                                        --query 'services[0]')
+
+                                    DEPLOYMENT_STATUS=\$(echo \${SERVICE_INFO} | jq -r '.deployments[0].status')
+                                    RUNNING_COUNT=\$(echo \${SERVICE_INFO} | jq -r '.runningCount')
+                                    DESIRED_COUNT=\$(echo \${SERVICE_INFO} | jq -r '.desiredCount')
+
+                                    echo "Status: \${DEPLOYMENT_STATUS} | Running: \${RUNNING_COUNT}/\${DESIRED_COUNT}"
+
+                                    if [ "\${DEPLOYMENT_STATUS}" = "PRIMARY" ] && [ "\${RUNNING_COUNT}" = "\${DESIRED_COUNT}" ]; then
+                                        echo "🎉 Blue/Green deployment completed successfully!"
+                                        exit 0
+                                    elif [ "\${DEPLOYMENT_STATUS}" = "FAILED" ]; then
+                                        echo "💥 Deployment failed!"
+                                        exit 1
+                                    fi
+
+                                    sleep 30
+                                    ELAPSED=\$((ELAPSED + 30))
+                                done
+                                echo "⏰ Deployment timeout reached!"
+                                exit 1
                                 """
                             }
                         }
