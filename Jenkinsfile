@@ -124,31 +124,41 @@ pipeline {
          stages {
 
              // === 5. Build & Push Docker Image ===
-            stage('Build & Push Docker Image') {
-                steps {
-                    withCredentials([string(credentialsId: env.AWS_ACCOUNT_ID_CREDENTIALS_ID, variable: 'AWS_ACCOUNT_ID')]) {
-                        script {
-                            echo "Credential ID: ${env.AWS_ACCOUNT_ID_CREDENTIALS_ID}"
-                            echo "AWS_ACCOUNT_ID raw env value: ${AWS_ACCOUNT_ID}"
-                            // [추가] 변수 값 자체를 디버깅
-                            if (AWS_ACCOUNT_ID == null || AWS_ACCOUNT_ID.isEmpty()) {
-                                error "FATAL: 'aws-account-id' credential secret is empty or null!"
-                            }
+               stage('Build & Push Docker Image') {
+                   steps {
+                       withCredentials([string(credentialsId: env.AWS_ACCOUNT_ID_CREDENTIALS_ID, variable: 'AWS_ACCOUNT_ID')]) {
+                           script {
+                               // === 디버그 ===
+                               echo "Credential ID: ${env.AWS_ACCOUNT_ID_CREDENTIALS_ID}"
+                               echo "AWS_ACCOUNT_ID raw env value: ${env.AWS_ACCOUNT_ID ?: 'NULL'}"
 
-                            // 안전하게 재할당
-                            env.ECR_REGISTRY_URI_PREFIX = "802318301972.dkr.ecr.ap-northeast-2.amazonaws.com"
-                            echo "ECR Registry: ${env.ECR_REGISTRY_URI_PREFIX}"
-                             def imageTag = "${env.ECR_REGISTRY_URI_PREFIX}/${env.ECR_REPO_NAME}:${env.BUILD_NUMBER}"
-                             def latestTag = "${env.ECR_REGISTRY_URI_PREFIX}/${env.ECR_REPO_NAME}:latest"
+                               // === 수정 핵심 ===
+                               if (!env.AWS_ACCOUNT_ID?.trim()) {
+                                   error "FATAL: AWS_ACCOUNT_ID credential is missing or empty!"
+                               }
 
-                             sh 'aws ecr get-login-password --region ' + AWS_REGION + ' | docker login --username AWS --password-stdin ' + env.ECR_REGISTRY_URI_PREFIX
-                             sh 'docker build -t ' + imageTag + ' -t ' + latestTag + ' .'
-                             sh 'docker push ' + imageTag
-                             sh 'docker push ' + latestTag
-                         }
-                     }
-                 }
-             }
+                               // Jenkins env context에서 직접 접근
+                               env.ECR_REGISTRY_URI_PREFIX = "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com"
+
+                               echo "✅ ECR Registry: ${env.ECR_REGISTRY_URI_PREFIX}"
+
+                               def imageTag = "${env.ECR_REGISTRY_URI_PREFIX}/${env.ECR_REPO_NAME}:${env.BUILD_NUMBER}"
+                               def latestTag = "${env.ECR_REGISTRY_URI_PREFIX}/${env.ECR_REPO_NAME}:latest"
+
+                               sh """
+                                   set -e
+                                   echo '🔐 Logging into ECR...'
+                                   aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY_URI_PREFIX
+                                   echo '🏗️  Building image...'
+                                   docker build -t $imageTag -t $latestTag .
+                                   echo '📤 Pushing image...'
+                                   docker push $imageTag
+                                   docker push $latestTag
+                               """
+                           }
+                       }
+                   }
+               }
 
              // === 6. Deploy to ECS (Blue/Green 반영) ===
             stage('Deploy to ECS') {
