@@ -118,6 +118,18 @@ pipeline {
                     branch 'feat/apply-new-jenkins'
                 }
             }
+            // 상위 스테이지의 steps 블록에서 Credentials를 미리 로드합니다.
+            steps {
+                withCredentials([string(credentialsId: env.AWS_ACCOUNT_ID_CREDENTIALS_ID, variable: 'AWS_ACCOUNT_ID')]) {
+                    script {
+                        // ECR_REGISTRY_URI_PREFIX를 여기서 한 번만 설정합니다.
+                        // 이 변수는 하위 모든 스테이지(5, 6)에서 사용 가능합니다.
+                        env.ECR_REGISTRY_URI_PREFIX = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+                        echo "ECR Registry set for all deploy stages: ${env.ECR_REGISTRY_URI_PREFIX}"
+                    }
+                }
+            }
+
             stages {
 
                 // === 5. Build & Push Docker Image ===
@@ -125,12 +137,6 @@ pipeline {
                     steps {
                         withCredentials([string(credentialsId: env.AWS_ACCOUNT_ID_CREDENTIALS_ID, variable: 'AWS_ACCOUNT_ID')]) {
                             script {
-                                echo "Using AWS Account ID: ${AWS_ACCOUNT_ID}"
-
-                                // 안전하게 재할당
-                                env.ECR_REGISTRY_URI_PREFIX = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-                                echo "ECR Registry: ${env.ECR_REGISTRY_URI_PREFIX}"
-
                                 def imageTag = "${env.ECR_REGISTRY_URI_PREFIX}/${env.ECR_REPO_NAME}:${env.BUILD_NUMBER}"
                                 def latestTag = "${env.ECR_REGISTRY_URI_PREFIX}/${env.ECR_REPO_NAME}:latest"
 
