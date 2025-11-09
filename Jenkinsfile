@@ -21,10 +21,6 @@ pipeline {
         ECS_SERVICE_NAME            = "${SERVICE_NAME}"
         ECS_TASK_DEFINITION_FAMILY  = "couponpop-${SERVICE_NAME}-task-definition"
 
-        // ECR 전체 URI (빌드 후 ECR 레지스트리 경로)
-        // [수정됨]: AWS_ACCOUNT_ID 변수를 사용하여 ECR 전체 URI를 동적으로 구성할 준비를 합니다.
-        ECR_REGISTRY_URI_PREFIX     = '' // <--- Step 5에서 AWS_ACCOUNT_ID로 채워짐
-
         // --- Jenkins Credentials ID ---
         AWS_ACCOUNT_ID_CREDENTIALS_ID = 'aws-account-id'
         GPR_CREDENTIALS_ID          = 'github-packages-token'
@@ -39,12 +35,24 @@ pipeline {
         // === 'CI' 상위 스테이지 ===
         stage('CI') {
             when {
-                // [수정됨]: changeset 조건을 제거하여 트리거 민감도를 낮춤 (Jenkins가 작동하는지 확인용)
-                anyOf {
-                    branch 'main'
-                    branch 'dev'
-                    branch 'feat/apply-new-jenkins'
-                    changeRequest()
+                // 브랜치 전략 및 파일 필터링 적용
+                allOf {
+                    // [조건 1] main/dev 푸시 또는 main/dev로의 PR일 때
+                    anyOf {
+                        branch 'main'
+                        branch 'dev'
+                        changeRequest(target: 'main')
+                        changeRequest(target: 'dev')
+                    }
+                    // [조건 2] 문서 파일(README.md 등)만 변경된 것이 아닐 때
+                    not {
+                        // 만약 변경된 파일이 이 목록에만 해당되면 CI를 실행하지 않음
+                        changeset pattern: 'README.md', comparator: 'GLOB'
+                        changeset pattern: 'docs/**', comparator: 'GLOB'
+                        changeset pattern: '.gitignore', comparator: 'GLOB'
+                        changeset pattern: '.github/ISSUE_TEMPLATE/**', comparator: 'GLOB'
+                        changeset pattern: 'LICENSE', comparator: 'GLOB'
+                    }
                 }
             }
             stages {
@@ -113,9 +121,21 @@ pipeline {
         // === 'Deploy' 상위 스테이지 ===
         stage('Deploy to Production') {
             when {
-                anyOf {
-                    branch 'main'
-                    branch 'feat/apply-new-jenkins'
+                // 브랜치 전략 및 파일 필터링 적용
+                allOf {
+                    // [조건 1] main 또는 dev 브랜치일 때 (PR은 제외)
+                    anyOf {
+                        branch 'main'
+                        branch 'dev'
+                    }
+                    // [조건 2] 문서 파일만 변경된 것이 아닐 때
+                    not {
+                        changeset pattern: 'README.md', comparator: 'GLOB'
+                        changeset pattern: 'docs/**', comparator: 'GLOB'
+                        changeset pattern: '.gitignore', comparator: 'GLOB'
+                        changeset pattern: '.github/ISSUE_TEMPLATE/**', comparator: 'GLOB'
+                        changeset pattern: 'LICENSE', comparator: 'GLOB'
+                    }
                 }
             }
             stages {
@@ -170,7 +190,7 @@ pipeline {
                                 def ecrRegistryUri = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
                                 if (ecrRegistryUri.contains("null")) {
-                                    error "FATAL: 'aws-account-id' credential secret is still empty or null!"
+                                    error "FATAL: 'aws-account-id' credential secret is empty or null!"
                                 }
 
                                 def imageUri = "${ecrRegistryUri}/${env.ECR_REPO_NAME}:${env.BUILD_NUMBER}"
