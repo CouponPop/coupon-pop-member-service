@@ -1,7 +1,7 @@
 package com.couponpop.memberservice.domain.auth.exception;
 
 
-import com.couponpop.memberservice.global.exception.ErrorCode;
+import com.couponpop.memberservice.common.exception.ErrorCode;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;

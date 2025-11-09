@@ -1,8 +1,8 @@
 package com.couponpop.memberservice.domain.auth.service;
 
 import com.couponpop.couponpopcoremodule.dto.fcmtoken.request.FcmTokenExpireRequest;
-import com.couponpop.memberservice.global.client.FcmTokenUserFeignClient;
-import com.couponpop.memberservice.global.exception.GlobalException;
+import com.couponpop.memberservice.common.client.FcmTokenUserFeignClient;
+import com.couponpop.memberservice.common.exception.GlobalException;
 import com.couponpop.memberservice.domain.auth.dto.request.LoginRequest;
 import com.couponpop.memberservice.domain.auth.dto.request.LogoutRequest;
 import com.couponpop.memberservice.domain.auth.dto.request.SignUpRequest;

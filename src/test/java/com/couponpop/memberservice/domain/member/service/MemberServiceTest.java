@@ -1,7 +1,7 @@
 package com.couponpop.memberservice.domain.member.service;
 
 
-import com.couponpop.memberservice.global.exception.GlobalException;
+import com.couponpop.memberservice.common.exception.GlobalException;
 import com.couponpop.memberservice.domain.auth.exception.AuthErrorCode;
 import com.couponpop.memberservice.domain.member.dto.request.MemberProfileUpdateRequest;
 import com.couponpop.memberservice.domain.member.dto.response.MemberProfileResponse;
