@@ -175,7 +175,7 @@ pipeline {
                                 // 2. try/catch 블록으로 배포 전체를 래핑
                                 try {
 
-                                    // [추가됨] 3. GitHub에 "배포 시작 (Pending)" 상태 보고
+                                    // 3. GitHub에 "배포 시작 (Pending)" 상태 보고
                                     githubNotify context: "Production Deployment",
                                                  status: "PENDING",
                                                  description: "Build #${env.BUILD_NUMBER} deploying to Production..."
