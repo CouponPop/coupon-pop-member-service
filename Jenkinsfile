@@ -158,128 +158,117 @@ pipeline {
                     }
                 }
 
-                // === 6. Deploy to ECS (GString 문제 해결 + GitHub 배포 상태 보고) ===
-                stage('Deploy to ECS') {
-                    steps {
-                        withCredentials([string(credentialsId: env.AWS_ACCOUNT_ID_CREDENTIALS_ID, variable: 'AWS_ACCOUNT_ID')]) {
-                            script {
-                                // 1. Groovy 스크립트 영역에서 변수 정의 (try 블록 밖)
-                                def ecrRegistryUri = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+               // === 6. Deploy to ECS (GString 문제 해결 + GitHub Checks API 보고) ===
+               stage('Deploy to ECS') {
+                   steps {
+                       withCredentials([string(credentialsId: env.AWS_ACCOUNT_ID_CREDENTIALS_ID, variable: 'AWS_ACCOUNT_ID')]) {
+                           script {
+                               // 1. Groovy 스크립트 영역에서 변수 정의
+                               def ecrRegistryUri = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
-                                if (ecrRegistryUri.contains("null")) {
-                                    error "FATAL: 'aws-account-id' credential secret is empty or null!"
-                                }
+                               if (ecrRegistryUri.contains("null")) {
+                                   error "FATAL: 'aws-account-id' credential secret is empty or null!"
+                               }
 
-                                def imageUri = "${ecrRegistryUri}/${env.ECR_REPO_NAME}:${env.BUILD_NUMBER}"
+                               def imageUri = "${ecrRegistryUri}/${env.ECR_REPO_NAME}:${env.BUILD_NUMBER}"
 
-                                // 2. try/catch 블록으로 배포 전체를 래핑
-                                try {
+                               // 2. withChecks 블록으로 배포 전체를 래핑합니다.
+                               // 'Production Deployment'라는 이름으로 GitHub에 상태 체크를 보고합니다.
+                               withChecks(name: 'Production Deployment') {
+                                   try {
+                                       // (withChecks가 자동으로 'PENDING'/'IN_PROGRESS' 상태를 보고합니다)
 
-                                    // 3. GitHub에 "배포 시작 (Pending)" 상태 보고
-                                    githubNotify context: "Production Deployment",
-                                                 status: "PENDING",
-                                                 description: "Build #${env.BUILD_NUMBER} deploying to Production..."
+                                       // 3. withEnv를 사용해 Shell 환경변수로 주입
+                                       withEnv([
+                                           "CLUSTER_NAME=${env.ECS_CLUSTER_NAME}",
+                                           "SERVICE_NAME=${env.ECS_SERVICE_NAME}",
+                                           "TASK_DEFINITION_FAMILY=${env.ECS_TASK_DEFINITION_FAMILY}",
+                                           "IMAGE_URI=${imageUri}",
+                                           "REGION=${env.AWS_REGION}"
+                                       ]) {
+                                           // 4. 순수 Shell 스크립트 실행 (''' 사용)
+                                           sh '''
+                                               set -e
 
-                                    // 4. withEnv를 사용해 Shell 환경변수로 주입
-                                    withEnv([
-                                        "CLUSTER_NAME=${env.ECS_CLUSTER_NAME}",
-                                        "SERVICE_NAME=${env.ECS_SERVICE_NAME}",
-                                        "TASK_DEFINITION_FAMILY=${env.ECS_TASK_DEFINITION_FAMILY}",
-                                        "IMAGE_URI=${imageUri}",
-                                        "REGION=${env.AWS_REGION}"
-                                    ]) {
-                                        // 5. 순수 Shell 스크립트 실행 (''' 사용)
-                                        sh '''
-                                            set -e
+                                               echo "=========================================="
+                                               echo "🚀 Starting Blue/Green Deployment (Service already configured)"
+                                               echo "Service: $SERVICE_NAME"
+                                               echo "New Image: $IMAGE_URI"
+                                               echo "=========================================="
 
-                                            echo "=========================================="
-                                            echo "🚀 Starting Blue/Green Deployment (Service already configured)"
-                                            echo "Service: $SERVICE_NAME"
-                                            echo "New Image: $IMAGE_URI"
-                                            echo "=========================================="
+                                               # ... (aws ecs describe-task-definition ... jq ... aws ecs register-task-definition ... aws ecs update-service ... ) ...
+                                               # (배포 셸 스크립트 전체 내용은 동일하게 유지)
 
-                                            echo "📋 Getting current task definition..."
-                                            CURRENT_TASK_DEF=$(aws ecs describe-task-definition \
-                                                --task-definition $TASK_DEFINITION_FAMILY \
-                                                --region $REGION \
-                                                --query 'taskDefinition')
+                                               echo "📋 Getting current task definition..."
+                                               CURRENT_TASK_DEF=$(aws ecs describe-task-definition --task-definition $TASK_DEFINITION_FAMILY --region $REGION --query 'taskDefinition')
 
-                                            echo "🔄 Creating new task definition with image: $IMAGE_URI"
-                                            NEW_TASK_DEF=$(echo "$CURRENT_TASK_DEF" | jq --arg IMAGE "$IMAGE_URI" --arg CONTAINER_NAME "$ECS_CONTAINER_NAME" '
-                                                (.containerDefinitions[] | select(.name == $CONTAINER_NAME) | .image) = $IMAGE | ...
-                                                del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy)')
+                                               echo "🔄 Creating new task definition with image: $IMAGE_URI"
+                                               NEW_TASK_DEF=$(echo "$CURRENT_TASK_DEF" | jq --arg IMAGE "$IMAGE_URI" --arg CONTAINER_NAME "$ECS_CONTAINER_NAME" '
+                                                   (.containerDefinitions[] | select(.name == $CONTAINER_NAME) | .image) = $IMAGE |
+                                                   del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy)')
 
-                                            echo "📝 Registering new task definition..."
-                                            NEW_TASK_DEF_ARN=$(aws ecs register-task-definition \
-                                                --region $REGION \
-                                                --cli-input-json "$NEW_TASK_DEF" \
-                                                --query 'taskDefinition.taskDefinitionArn' \
-                                                --output text)
-                                            echo "✅ New task definition: $NEW_TASK_DEF_ARN"
+                                               echo "📝 Registering new task definition..."
+                                               NEW_TASK_DEF_ARN=$(aws ecs register-task-definition --region $REGION --cli-input-json "$NEW_TASK_DEF" --query 'taskDefinition.taskDefinitionArn' --output text)
+                                               echo "✅ New task definition: $NEW_TASK_DEF_ARN"
 
-                                            echo "🚀 Initiating Blue/Green deployment..."
-                                            aws ecs update-service \
-                                                --cluster $CLUSTER_NAME \
-                                                --service $SERVICE_NAME \
-                                                --task-definition $NEW_TASK_DEF_ARN \
-                                                --force-new-deployment \
-                                                --region $REGION > /dev/null
-                                            echo "✅ Blue/Green deployment initiated!"
+                                               echo "🚀 Initiating Blue/Green deployment..."
+                                               aws ecs update-service --cluster $CLUSTER_NAME --service $SERVICE_NAME --task-definition $NEW_TASK_DEF_ARN --force-new-deployment --region $REGION > /dev/null
+                                               echo "✅ Blue/Green deployment initiated!"
 
-                                            echo "👀 Monitoring deployment progress..."
-                                            TIMEOUT=2400
-                                            ELAPSED=0
-                                            while [ $ELAPSED -lt $TIMEOUT ]; do
-                                                SERVICE_INFO=$(aws ecs describe-services \
-                                                    --cluster $CLUSTER_NAME \
-                                                    --services $SERVICE_NAME \
-                                                    --region $REGION \
-                                                    --query 'services[0]')
+                                               echo "👀 Monitoring deployment progress..."
+                                               TIMEOUT=2400
+                                               ELAPSED=0
+                                               while [ $ELAPSED -lt $TIMEOUT ]; do
+                                                   SERVICE_INFO=$(aws ecs describe-services --cluster $CLUSTER_NAME --services $SERVICE_NAME --region $REGION --query 'services[0]')
+                                                   DEPLOYMENT_STATUS=$(echo $SERVICE_INFO | jq -r '.deployments[0].status')
+                                                   RUNNING_COUNT=$(echo $SERVICE_INFO | jq -r '.runningCount')
+                                                   DESIRED_COUNT=$(echo $SERVICE_INFO | jq -r '.desiredCount')
+                                                   DEPLOYMENTS=$(echo $SERVICE_INFO | jq -r '.deployments | length')
 
-                                                DEPLOYMENT_STATUS=$(echo $SERVICE_INFO | jq -r '.deployments[0].status')
-                                                RUNNING_COUNT=$(echo $SERVICE_INFO | jq -r '.runningCount')
-                                                DESIRED_COUNT=$(echo $SERVICE_INFO | jq -r '.desiredCount')
-                                                DEPLOYMENTS=$(echo $SERVICE_INFO | jq -r '.deployments | length')
+                                                   echo "[ $(date '+%H:%M:%S') ] Status: $DEPLOYMENT_STATUS | Running: $RUNNING_COUNT/$DESIRED_COUNT | Deployments: $DEPLOYMENTS"
 
-                                                echo "[ $(date '+%H:%M:%S') ] Status: $DEPLOYMENT_STATUS | Running: $RUNNING_COUNT/$DESIRED_COUNT | Deployments: $DEPLOYMENTS"
+                                                   if [ "$DEPLOYMENT_STATUS" = "PRIMARY" ] && [ "$RUNNING_COUNT" = "$DESIRED_COUNT" ] && [ "$DEPLOYMENTS" = "1" ]; then
+                                                       echo "🎉 Blue/Green deployment completed successfully!"
+                                                       break
+                                                   elif [ "$DEPLOYMENT_STATUS" = "FAILED" ]; then
+                                                       echo "💥 Deployment failed!"
+                                                       exit 1
+                                                   fi
+                                                   sleep 30
+                                                   ELAPSED=$(( $ELAPSED + 30 ))
+                                               done
+                                               if [ $ELAPSED -ge $TIMEOUT ]; then
+                                                   echo "⏰ Deployment timeout reached!"
+                                                   exit 1
+                                               fi
+                                               echo "🎊 Deployment successful! New version is now serving traffic."
+                                           '''
+                                       } // end withEnv
 
-                                                if [ "$DEPLOYMENT_STATUS" = "PRIMARY" ] && [ "$RUNNING_COUNT" = "$DESIRED_COUNT" ] && [ "$DEPLOYMENTS" = "1" ]; then
-                                                    echo "🎉 Blue/Green deployment completed successfully!"
-                                                    break
-                                                elif [ "$DEPLOYMENT_STATUS" = "FAILED" ]; then
-                                                    echo "💥 Deployment failed!"
-                                                    exit 1
-                                                fi
+                                       // 5. GitHub에 "배포 성공" 상태 보고
+                                       publishChecks(
+                                           status: 'COMPLETED',
+                                           conclusion: 'SUCCESS',
+                                           title: 'Deploy Success',
+                                           summary: "Build #${env.BUILD_NUMBER} successfully deployed to Production."
+                                       )
 
-                                                sleep 30
-                                                ELAPSED=$(( $ELAPSED + 30 ))
-                                            done
-
-                                            if [ $ELAPSED -ge $TIMEOUT ]; then
-                                                echo "⏰ Deployment timeout reached!"
-                                                exit 1
-                                            fi
-                                            echo "🎊 Deployment successful! New version is now serving traffic."
-                                        '''
-                                    } // end withEnv
-
-                                    // 6. GitHub에 "배포 성공 (Success)" 상태 보고
-                                    githubNotify context: "Production Deployment",
-                                                 status: "SUCCESS",
-                                                 description: "Build #${env.BUILD_NUMBER} successfully deployed."
-
-                                } catch (e) {
-                                    // 7. GitHub에 "배포 실패 (Failure)" 상태 보고
-                                    githubNotify context: "Production Deployment",
-                                                 status: "FAILURE",
-                                                 description: "Build #${env.BUILD_NUMBER} failed to deploy."
-                                    // Jenkins 빌드도 실패 처리
-                                    throw e
-                                }
-                            } // end script
-                        } // end withCredentials
-                    }
-                } // end stage Deploy to ECS
+                                   } catch (e) {
+                                       // 6. GitHub에 "배포 실패" 상태 보고
+                                       publishChecks(
+                                           status: 'COMPLETED',
+                                           conclusion: 'FAILURE',
+                                           title: 'Deploy Failed',
+                                           summary: "Build #${env.BUILD_NUMBER} failed to deploy. Error: ${e.message}"
+                                       )
+                                       // Jenkins 빌드도 실패 처리
+                                       throw e
+                                   }
+                               } // end withChecks
+                           } // end script
+                       } // end withCredentials
+                   }
+               } // end stage Deploy to ECS
 
             } // 'Deploy' 하위 stages 끝
         } // 'Deploy' 상위 stage 끝
