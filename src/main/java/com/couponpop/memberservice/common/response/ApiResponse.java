@@ -1,4 +1,4 @@
-package com.couponpop.memberservice.global.response;
+package com.couponpop.memberservice.common.response;
 
 import lombok.Getter;
 import org.springframework.http.HttpStatus;

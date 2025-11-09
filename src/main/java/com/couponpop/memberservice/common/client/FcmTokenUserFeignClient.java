@@ -1,7 +1,7 @@
-package com.couponpop.memberservice.global.client;
+package com.couponpop.memberservice.common.client;
 
 import com.couponpop.couponpopcoremodule.dto.fcmtoken.request.FcmTokenExpireRequest;
-import com.couponpop.memberservice.global.config.UserFeignConfig;
+import com.couponpop.memberservice.common.config.UserFeignConfig;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.PostMapping;
 
