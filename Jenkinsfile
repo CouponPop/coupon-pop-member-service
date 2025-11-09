@@ -122,48 +122,45 @@ pipeline {
          // [수정됨] 상위 steps 블록 제거
 
          stages {
+         // === 5. Build & Push Docker Image ===
+            stage('Build & Push Docker Image') {
+                steps {
+                    withCredentials([string(credentialsId: env.AWS_ACCOUNT_ID_CREDENTIALS_ID, variable: 'AWS_ACCOUNT_ID')]) {
+                        script {
+                            // [수정] env.ECR_REGISTRY_URI_PREFIX 대신 'def'로 로컬 변수 선언
+                            def ecrRegistryUri = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
-             // === 5. Build & Push Docker Image ===
-                stage('Build & Push Docker Image') {
-                    steps {
-                        withCredentials([string(credentialsId: env.AWS_ACCOUNT_ID_CREDENTIALS_ID, variable: 'AWS_ACCOUNT_ID')]) {
-                            script {
-                                // [수정] env.ECR_REGISTRY_URI_PREFIX 대신 'def'로 로컬 변수 선언
-                                def ecrRegistryUri = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+                            echo "ECR Registry: ${ecrRegistryUri}" // 디버깅용
 
-                                echo "ECR Registry: ${ecrRegistryUri}" // 디버깅용
+                            // [수정] 로컬 변수를 사용하여 이미지 태그 정의
+                            def imageTag = "${ecrRegistryUri}/${env.ECR_REPO_NAME}:${env.BUILD_NUMBER}"
+                            def latestTag = "${ecrRegistryUri}/${env.ECR_REPO_NAME}:latest"
 
-                                // [수정] 로컬 변수를 사용하여 이미지 태그 정의
-                                def imageTag = "${ecrRegistryUri}/${env.ECR_REPO_NAME}:${env.BUILD_NUMBER}"
-                                def latestTag = "${ecrRegistryUri}/${env.ECR_REPO_NAME}:latest"
-
-                                // [수정] sh 명령어를 큰따옴표(GString)로 변경하여
-                                // ecrRegistryUri, imageTag, latestTag 변수를 올바르게 주입
-                                sh """
-                                    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ecrRegistryUri}
-                                    docker build -t ${imageTag} -t ${latestTag} .
-                                    docker push ${imageTag}
-                                    docker push ${latestTag}
-                                """
-                            }
+                            // [수정] sh 명령어를 큰따옴표(GString)로 변경하여
+                            // ecrRegistryUri, imageTag, latestTag 변수를 올바르게 주입
+                            sh """
+                                aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ecrRegistryUri}
+                                docker build -t ${imageTag} -t ${latestTag} .
+                                docker push ${imageTag}
+                                docker push ${latestTag}
+                            """
                         }
                     }
                 }
+            }
 
             // === 6. Deploy to ECS (Blue/Green 최종 수정) ===
             stage('Deploy to ECS') {
                 steps {
                     withCredentials([string(credentialsId: env.AWS_ACCOUNT_ID_CREDENTIALS_ID, variable: 'AWS_ACCOUNT_ID')]) {
                         script {
-                            // 5단계에서 사용했던 로컬 변수 선언을 6단계에도 동일하게 적용
                             def ecrRegistryUri = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
-                            // 만약의 경우를 대비해 null 체크
                             if (ecrRegistryUri.contains("null")) {
                                 error "FATAL: AWS_ACCOUNT_ID credential secret is still empty or null!"
                             }
 
-                            // AWS 가이드 기반의 최종 배포 스크립트
+                            // [수정됨] 이스케이프 오류가 수정된 최종 배포 스크립트
                             sh """
                             # sh 블록 시작 시 set -e (오류 발생 시 즉시 중단)를 설정합니다.
                             set -e
@@ -179,47 +176,45 @@ pipeline {
                             REGION="${AWS_REGION}"
 
                             echo "=========================================="
-                            echo "Starting Blue/Green Deployment (Service already configured)"
+                            echo "🚀 Starting Blue/Green Deployment (Service already configured)"
                             echo "Service: \${SERVICE_NAME}"
                             echo "New Image: \${IMAGE_URI}"
                             echo "=========================================="
 
                             # 1. 현재 태스크 정의 가져오기
-                            echo "Getting current task definition..."
+                            echo "📋 Getting current task definition..."
                             CURRENT_TASK_DEF=\$(aws ecs describe-task-definition \
                                 --task-definition \${TASK_DEFINITION_FAMILY} \
                                 --region \${REGION} \
                                 --query 'taskDefinition')
 
                             # 2. 새 태스크 정의 생성 (새 이미지로)
-                            echo "Creating new task definition with image: \${IMAGE_URI}"
+                            echo "🔄 Creating new task definition with image: \${IMAGE_URI}"
                             NEW_TASK_DEF=\$(echo \${CURRENT_TASK_DEF} | jq --arg IMAGE "\${IMAGE_URI}" '
                                 .containerDefinitions[0].image = \$IMAGE |
                                 del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy)')
 
                             # 3. 새 태스크 정의 등록
-                            echo "Registering new task definition..."
+                            echo "📝 Registering new task definition..."
                             NEW_TASK_DEF_ARN=\$(aws ecs register-task-definition \
                                 --region \${REGION} \
                                 --cli-input-json "\${NEW_TASK_DEF}" \
                                 --query 'taskDefinition.taskDefinitionArn' \
                                 --output text)
-                            echo "New task definition: \${NEW_TASK_DEF_ARN}"
+                            echo "✅ New task definition: \${NEW_TASK_DEF_ARN}"
 
                             # 4. 서비스 업데이트 (가장 단순한 형태)
-                            # ECS 서비스가 이미 B/G로 설정되어 있으므로,
-                            # CodeDeploy가 자동으로 배포를 처리합니다.
-                            echo "Initiating Blue/Green deployment..."
+                            echo "🚀 Initiating Blue/Green deployment..."
                             aws ecs update-service \
                                 --cluster \${CLUSTER_NAME} \
                                 --service \${SERVICE_NAME} \
                                 --task-definition \${NEW_TASK_DEF_ARN} \
                                 --force-new-deployment \
                                 --region \${REGION} > /dev/null
-                            echo "Blue/Green deployment initiated!"
+                            echo "✅ Blue/Green deployment initiated!"
 
                             # 5. 배포 모니터링 (AWS 가이드의 향상된 버전)
-                            echo "Monitoring deployment progress..."
+                            echo "👀 Monitoring deployment progress..."
                             TIMEOUT=2400  # 40분 (Bake time 10분 포함)
                             ELAPSED=0
                             while [ \${ELAPSED} -lt \${TIMEOUT} ]; do
@@ -232,12 +227,11 @@ pipeline {
                                 DEPLOYMENT_STATUS=\$(echo \${SERVICE_INFO} | jq -r '.deployments[0].status')
                                 RUNNING_COUNT=\$(echo \${SERVICE_INFO} | jq -r '.runningCount')
                                 DESIRED_COUNT=\$(echo \${SERVICE_INFO} | jq -r '.desiredCount')
-                                # 배포가 2개(블루/그린)인지 1개(완료)인지 확인
                                 DEPLOYMENTS=\$(echo \${SERVICE_INFO} | jq -r '.deployments | length')
 
-                                echo "[$(date '+%H:%M:%S')] Status: \${DEPLOYMENT_STATUS} | Running: \${RUNNING_COUNT}/\${DESIRED_COUNT} | Deployments: \${DEPLOYMENTS}"
+                                # [수정] $(date ...) -> \$(date ...)
+                                echo "[ \$(date '+%H:%M:%S') ] Status: \${DEPLOYMENT_STATUS} | Running: \${RUNNING_COUNT}/\${DESIRED_COUNT} | Deployments: \${DEPLOYMENTS}"
 
-                                # 배포 완료 확인 (배포 상태가 PRIMARY이고, 배포가 1개만 남았을 때)
                                 if [ "\${DEPLOYMENT_STATUS}" = "PRIMARY" ] && [ "\${RUNNING_COUNT}" = "\${DESIRED_COUNT}" ] && [ "\${DEPLOYMENTS}" = "1" ]; then
                                     echo "🎉 Blue/Green deployment completed successfully!"
                                     break
@@ -247,7 +241,8 @@ pipeline {
                                 fi
 
                                 sleep 30
-                                ELAPSED=\$((ELAPSED + 30))
+                                # [수정] $((...)) -> \$((...)) 및 $ELAPSED -> \${ELAPSED}
+                                ELAPSED=\$(( \${ELAPSED} + 30 ))
                             done
 
                             if [ \${ELAPSED} -ge \${TIMEOUT} ]; then
