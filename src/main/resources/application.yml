@@ -4,10 +4,28 @@ spring:
   config:
     import: optional:file:.env[.properties]
   datasource:
-    url: ${DB_URL}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    master:
+      hikari:
+        jdbc-url: ${DB_MASTER_URL}
+        username: ${DB_USERNAME}
+        password: ${DB_PASSWORD}
+        driver-class-name: com.mysql.cj.jdbc.Driver
+        maximum-pool-size: 20
+        minimum-idle: 10
+        connection-timeout: 30000   # 30초
+        max-lifetime: 1800000       # 30분
+        leak-detection-threshold: 60000  # 누수 감지
+    slave:
+      hikari:
+        jdbc-url: ${DB_SLAVE_URL}
+        username: ${DB_USERNAME}
+        password: ${DB_PASSWORD}
+        driver-class-name: com.mysql.cj.jdbc.Driver
+        maximum-pool-size: 20
+        minimum-idle: 10
+        connection-timeout: 30000   # 30초
+        max-lifetime: 1800000       # 30분
+        leak-detection-threshold: 60000  # 누수 감지
   jpa:
     hibernate:
       ddl-auto: none
@@ -23,6 +41,9 @@ spring:
       port: ${REDIS_PORT}
   flyway:
     enabled: true
+    url: ${DB_MASTER_URL}
+    user: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     locations: classpath:db/migration
     baseline-on-migrate: true
     baseline-version: 1
