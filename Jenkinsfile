@@ -205,8 +205,8 @@ pipeline {
                                                 --query 'taskDefinition')
 
                                             echo "🔄 Creating new task definition with image: $IMAGE_URI"
-                                            NEW_TASK_DEF=$(echo $CURRENT_TASK_DEF | jq --arg IMAGE "$IMAGE_URI" '
-                                                (.containerDefinitions[] | select(.name == "member") | .image) = $IMAGE |
+                                            NEW_TASK_DEF=$(echo "$CURRENT_TASK_DEF" | jq --arg IMAGE "$IMAGE_URI" --arg CONTAINER_NAME "$ECS_CONTAINER_NAME" '
+                                                (.containerDefinitions[] | select(.name == $CONTAINER_NAME) | .image) = $IMAGE | ...
                                                 del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy)')
 
                                             echo "📝 Registering new task definition..."
