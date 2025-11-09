@@ -1,4 +1,4 @@
-package com.couponpop.memberservice.common.config;
+package com.couponpop.memberservice.global.config;
 
 import com.couponpop.security.constants.SecurityTemplates;
 import feign.RequestInterceptor;

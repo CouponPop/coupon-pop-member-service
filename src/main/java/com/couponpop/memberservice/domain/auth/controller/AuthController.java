@@ -1,6 +1,6 @@
 package com.couponpop.memberservice.domain.auth.controller;
 
-import com.couponpop.memberservice.common.response.ApiResponse;
+import com.couponpop.memberservice.global.response.ApiResponse;
 import com.couponpop.memberservice.domain.auth.dto.request.LoginRequest;
 import com.couponpop.memberservice.domain.auth.dto.request.LogoutRequest;
 import com.couponpop.memberservice.domain.auth.dto.request.SignUpRequest;

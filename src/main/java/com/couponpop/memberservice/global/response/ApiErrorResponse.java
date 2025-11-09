@@ -1,6 +1,6 @@
-package com.couponpop.memberservice.common.response;
+package com.couponpop.memberservice.global.response;
 
-import com.couponpop.memberservice.common.exception.ErrorCode;
+import com.couponpop.memberservice.global.exception.ErrorCode;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.AccessLevel;
 import lombok.Builder;

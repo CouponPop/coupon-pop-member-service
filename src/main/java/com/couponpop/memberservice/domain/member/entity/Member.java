@@ -1,6 +1,6 @@
 package com.couponpop.memberservice.domain.member.entity;
 
-import com.couponpop.memberservice.common.entity.BaseEntity;
+import com.couponpop.memberservice.global.entity.BaseEntity;
 import com.couponpop.memberservice.domain.member.dto.request.MemberProfileUpdateRequest;
 import com.couponpop.memberservice.domain.member.enums.MemberType;
 import jakarta.persistence.*;

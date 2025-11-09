@@ -1,6 +1,6 @@
 package com.couponpop.memberservice.domain.member.controller;
 
-import com.couponpop.memberservice.common.response.ApiResponse;
+import com.couponpop.memberservice.global.response.ApiResponse;
 import com.couponpop.memberservice.domain.member.dto.request.MemberProfileUpdateRequest;
 import com.couponpop.memberservice.domain.member.dto.response.MemberProfileResponse;
 import com.couponpop.memberservice.domain.member.service.MemberService;
