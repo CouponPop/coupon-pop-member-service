@@ -150,13 +150,12 @@ pipeline {
                     }
                 }
 
-             // === 6. Deploy to ECS (Blue/Green 반영) ===
-             stage('Deploy to ECS') {
+            // === 6. Deploy to ECS (Blue/Green 최종 수정) ===
+            stage('Deploy to ECS') {
                 steps {
                     withCredentials([string(credentialsId: env.AWS_ACCOUNT_ID_CREDENTIALS_ID, variable: 'AWS_ACCOUNT_ID')]) {
                         script {
-                            // [!!! 수정 !!!]
-                            // 6단계의 스크립트 블록에서도 로컬 변수를 선언합니다.
+                            // 5단계에서 사용했던 로컬 변수 선언을 6단계에도 동일하게 적용
                             def ecrRegistryUri = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 
                             // 만약의 경우를 대비해 null 체크
@@ -164,74 +163,64 @@ pipeline {
                                 error "FATAL: AWS_ACCOUNT_ID credential secret is still empty or null!"
                             }
 
+                            // AWS 가이드 기반의 최종 배포 스크립트
                             sh """
                             # sh 블록 시작 시 set -e (오류 발생 시 즉시 중단)를 설정합니다.
                             set -e
 
                             # ===========================================
-                            # Blue/Green Deployment Script (AWS 가이드 기반)
+                            # Blue/Green Deployment Script (Service Alrady Configured)
                             # ===========================================
                             # 환경 변수 설정 (Jenkins ENV 사용)
                             CLUSTER_NAME="${ECS_CLUSTER_NAME}"
                             SERVICE_NAME="${ECS_SERVICE_NAME}"
                             TASK_DEFINITION_FAMILY="${ECS_TASK_DEFINITION_FAMILY}"
-
-                            # [!!! 수정 !!!]
-                            # ecrRegistryUri 로컬 변수를 사용하여 IMAGE_URI를 설정합니다.
                             IMAGE_URI="${ecrRegistryUri}/${ECR_REPO_NAME}:${BUILD_NUMBER}"
                             REGION="${AWS_REGION}"
 
                             echo "=========================================="
-                            echo "Starting Blue/Green Deployment"
-                            echo "Cluster: \${CLUSTER_NAME}"
+                            echo "Starting Blue/Green Deployment (Service already configured)"
                             echo "Service: \${SERVICE_NAME}"
                             echo "New Image: \${IMAGE_URI}"
                             echo "=========================================="
 
                             # 1. 현재 태스크 정의 가져오기
-                            echo "📋 Retrieving current task definition..."
+                            echo "Getting current task definition..."
                             CURRENT_TASK_DEF=\$(aws ecs describe-task-definition \
                                 --task-definition \${TASK_DEFINITION_FAMILY} \
                                 --region \${REGION} \
                                 --query 'taskDefinition')
 
-                            # 2. 새 태스크 정의 생성 및 업데이트
-                            echo "🔄 Creating new task definition..."
+                            # 2. 새 태스크 정의 생성 (새 이미지로)
+                            echo "Creating new task definition with image: \${IMAGE_URI}"
                             NEW_TASK_DEF=\$(echo \${CURRENT_TASK_DEF} | jq --arg IMAGE "\${IMAGE_URI}" '
                                 .containerDefinitions[0].image = \$IMAGE |
                                 del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy)')
 
                             # 3. 새 태스크 정의 등록
-                            echo "📝 Registering new task definition..."
+                            echo "Registering new task definition..."
                             NEW_TASK_DEF_ARN=\$(aws ecs register-task-definition \
                                 --region \${REGION} \
                                 --cli-input-json "\${NEW_TASK_DEF}" \
                                 --query 'taskDefinition.taskDefinitionArn' \
                                 --output text)
-                            echo "✅ New task definition: \${NEW_TASK_DEF_ARN}"
+                            echo "New task definition: \${NEW_TASK_DEF_ARN}"
 
-                            # 4. 블루/그린 배포 시작
-                            echo "🚀 Starting blue/green deployment..."
-                            # deploymentCircuitBreaker를 비활성화하고 bakeTimeInMinutes를 5분으로 설정
+                            # 4. 서비스 업데이트 (가장 단순한 형태)
+                            # ECS 서비스가 이미 B/G로 설정되어 있으므로,
+                            # CodeDeploy가 자동으로 배포를 처리합니다.
+                            echo "Initiating Blue/Green deployment..."
                             aws ecs update-service \
                                 --cluster \${CLUSTER_NAME} \
                                 --service \${SERVICE_NAME} \
                                 --task-definition \${NEW_TASK_DEF_ARN} \
                                 --force-new-deployment \
-                                --deployment-configuration '{
-                                    "deploymentCircuitBreaker": {
-                                        "enable": false
-                                    },
-                                    "blueGreenDeployment": {
-                                        "strategy": "BLUE_GREEN",
-                                        "bakeTimeInMinutes": 5
-                                    }
-                                }' \
                                 --region \${REGION} > /dev/null
+                            echo "Blue/Green deployment initiated!"
 
-                            # 5. 배포 모니터링 및 완료 대기
-                            echo "👀 Monitoring deployment (max 30 minutes)..."
-                            TIMEOUT=1800  # 30분 타임아웃 (AWS 가이드 유지)
+                            # 5. 배포 모니터링 (AWS 가이드의 향상된 버전)
+                            echo "Monitoring deployment progress..."
+                            TIMEOUT=2400  # 40분 (Bake time 10분 포함)
                             ELAPSED=0
                             while [ \${ELAPSED} -lt \${TIMEOUT} ]; do
                                 SERVICE_INFO=\$(aws ecs describe-services \
@@ -243,12 +232,15 @@ pipeline {
                                 DEPLOYMENT_STATUS=\$(echo \${SERVICE_INFO} | jq -r '.deployments[0].status')
                                 RUNNING_COUNT=\$(echo \${SERVICE_INFO} | jq -r '.runningCount')
                                 DESIRED_COUNT=\$(echo \${SERVICE_INFO} | jq -r '.desiredCount')
+                                # 배포가 2개(블루/그린)인지 1개(완료)인지 확인
+                                DEPLOYMENTS=\$(echo \${SERVICE_INFO} | jq -r '.deployments | length')
 
-                                echo "Status: \${DEPLOYMENT_STATUS} | Running: \${RUNNING_COUNT}/\${DESIRED_COUNT}"
+                                echo "[$(date '+%H:%M:%S')] Status: \${DEPLOYMENT_STATUS} | Running: \${RUNNING_COUNT}/\${DESIRED_COUNT} | Deployments: \${DEPLOYMENTS}"
 
-                                if [ "\${DEPLOYMENT_STATUS}" = "PRIMARY" ] && [ "\${RUNNING_COUNT}" = "\${DESIRED_COUNT}" ]; then
+                                # 배포 완료 확인 (배포 상태가 PRIMARY이고, 배포가 1개만 남았을 때)
+                                if [ "\${DEPLOYMENT_STATUS}" = "PRIMARY" ] && [ "\${RUNNING_COUNT}" = "\${DESIRED_COUNT}" ] && [ "\${DEPLOYMENTS}" = "1" ]; then
                                     echo "🎉 Blue/Green deployment completed successfully!"
-                                    exit 0
+                                    break
                                 elif [ "\${DEPLOYMENT_STATUS}" = "FAILED" ]; then
                                     echo "💥 Deployment failed!"
                                     exit 1
@@ -257,13 +249,17 @@ pipeline {
                                 sleep 30
                                 ELAPSED=\$((ELAPSED + 30))
                             done
-                            echo "⏰ Deployment timeout reached!"
-                            exit 1
+
+                            if [ \${ELAPSED} -ge \${TIMEOUT} ]; then
+                                echo "⏰ Deployment timeout reached!"
+                                exit 1
+                            fi
+                            echo "🎊 Deployment successful! New version is now serving traffic."
                             """
                         }
                     }
                 }
-             }
+            }
          } // 'Deploy' 하위 stages 끝
      } // 'Deploy' 상위 stage 끝
 
