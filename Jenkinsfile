@@ -34,26 +34,13 @@ pipeline {
 
         // === 'CI' 상위 스테이지 ===
         stage('CI') {
-when {
-                allOf {
-                    // [조건 1] main/dev 푸시 또는 main/dev로의 PR일 때
-                    anyOf {
-                        branch 'main'
-                        branch 'dev'
-                        changeRequest(target: 'main')
-                        changeRequest(target: 'dev')
-                    }
-                    // [조건 2] 빌드가 필요한 "코드 파일"이 하나라도 포함될 때
-                    anyOf {
-                        changeset pattern: 'src/**', comparator: 'GLOB'
-                        changeset pattern: 'build.gradle', comparator: 'GLOB'
-                        changeset pattern: 'settings.gradle', comparator: 'GLOB'
-                        changeset pattern: 'gradlew', comparator: 'GLOB'
-                        changeset pattern: 'gradle/**', comparator: 'GLOB'
-                        changeset pattern: 'Jenkinsfile', comparator: 'GLOB'
-                        changeset pattern: 'Dockerfile', comparator: 'GLOB'
-                        // (빌드에 필요한 다른 파일/폴더가 있다면 여기에 추가)
-                    }
+        when {
+                // main/dev 푸시 또는 main/dev로의 PR일 때 (파일 필터링 없음)
+                anyOf {
+                    branch 'main'
+                    branch 'dev'
+                    changeRequest(target: 'main')
+                    changeRequest(target: 'dev')
                 }
             }
             stages {
@@ -122,23 +109,10 @@ when {
         // === 'Deploy' 상위 스테이지 ===
         stage('Deploy to Production') {
             when {
-                // 브랜치 전략 및 "Inclusion" 파일 필터링 적용
-                allOf {
-                    // [조건 1] main 또는 dev 브랜치일 때 (PR은 제외)
-                    anyOf {
-                        branch 'main'
-                        branch 'dev'
-                    }
-                    // [조건 2] 빌드가 필요한 "코드 파일"이 하나라도 포함될 때
-                    anyOf {
-                        changeset pattern: 'src/**', comparator: 'GLOB'
-                        changeset pattern: 'build.gradle', comparator: 'GLOB'
-                        changeset pattern: 'settings.gradle', comparator: 'GLOB'
-                        changeset pattern: 'gradlew', comparator: 'GLOB'
-                        changeset pattern: 'gradle/**', comparator: 'GLOB'
-                        changeset pattern: 'Jenkinsfile', comparator: 'GLOB'
-                        changeset pattern: 'Dockerfile', comparator: 'GLOB'
-                    }
+                // main 또는 dev 브랜치일 때 (PR은 제외, 파일 필터링 없음)
+                anyOf {
+                    branch 'main'
+                    branch 'dev'
                 }
             }
             stages {
@@ -223,8 +197,8 @@ when {
                                             --query 'taskDefinition')
 
                                         echo "🔄 Creating new task definition with image: $IMAGE_URI"
-                                        NEW_TASK_DEF=$(echo $CURRENT_TASK_DEF | jq --arg IMAGE "$IMAGE_URI" '
-                                            .containerDefinitions[0].image = $IMAGE |
+                                        NEW_TASK_DEF=$(echo "$CURRENT_TASK_DEF" | jq --arg IMAGE "$IMAGE_URI" --arg CONTAINER_NAME "$ECS_CONTAINER_NAME" '
+                                            (.containerDefinitions[] | select(.name == $CONTAINER_NAME) | .image) = $IMAGE |
                                             del(.taskDefinitionArn, .revision, .status, .requiresAttributes, .placementConstraints, .compatibilities, .registeredAt, .registeredBy)')
 
                                         echo "📝 Registering new task definition..."
