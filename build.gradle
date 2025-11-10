@@ -98,8 +98,8 @@ repositories {
         url = uri("https://maven.pkg.github.com/CouponPop/couponpop-core-module")
         credentials {
             def githubCredentials = loadGithubCredentials()
-            username = githubCredentials.GITHUB_ACTOR ?: System.getenv("GITHUB_ACTOR") ?: "unknown"
-            password = githubCredentials.GITHUB_TOKEN ?: System.getenv("GITHUB_TOKEN") ?: "unknown"
+            username = System.getenv("GITHUB_ACTOR") ?: githubCredentials.GITHUB_ACTOR ?: "unknown"
+            password = System.getenv("GITHUB_TOKEN") ?: githubCredentials.GITHUB_TOKEN ?: "unknown"
         }
     }
 }
@@ -125,7 +125,7 @@ dependencies {
     implementation 'com.couponpop:couponpop-security:0.0.3-SNAPSHOT'
 
     // [CouponPop Core Module]
-    implementation 'com.couponpop:couponpop-core:0.0.7-SNAPSHOT'
+    implementation 'com.couponpop:couponpop-core:0.0.15-SNAPSHOT'
 
     // [DB]
     runtimeOnly 'com.mysql:mysql-connector-j'
