@@ -104,7 +104,7 @@ pipeline {
                                   GITHUB_TOKEN=${GITHUB_TOKEN} \
                                   DB_MASTER_URL=${DB_URL} \
                                   DB_SLAVE_URL=${DB_URL} \
-                                  ./gradlew clean build --no-daemon -Dspring.profiles.active=test
+                                  ./gradlew clean build --no-daemon
 
                                   rm -f build/libs/*plain*.jar
                               '''
