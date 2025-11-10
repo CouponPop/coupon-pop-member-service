@@ -10,10 +10,18 @@
 #   (.gitignore에 추가하는 것을 잊지 마세요.)
 spring:
   datasource:
-    url: jdbc:h2:mem:member_test_db;DB_CLOSE_DELAY=-1
-    username: sa
-    password:
-    driver-class-name: org.h2.Driver
+    master:
+      hikari:
+        jdbc-url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1
+        driver-class-name: org.h2.Driver
+        username: sa
+        password:
+    slave:
+      hikari:
+        jdbc-url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1
+        driver-class-name: org.h2.Driver
+        username: sa
+        password:
 
   jpa:
     hibernate:
