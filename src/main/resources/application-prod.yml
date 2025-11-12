@@ -14,6 +14,15 @@ client:
     name: notification-service
     url: http://notification.couponpop.internal:8080
 
+logging:
+  level:
+    root: INFO
+    org.springframework: INFO
+    org.hibernate.SQL: WARN
+    org.hibernate.orm.jdbc.bind: WARN
+    com.couponpop.notificationservice: DEBUG
+    com.couponpop.security: DEBUG
+
 cloud:
   aws:
     region:
