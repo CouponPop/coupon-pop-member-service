@@ -26,6 +26,7 @@ public class SystemFeignConfig {
     public RequestInterceptor systemTokenRequestInterceptor(SystemTokenProvider systemTokenProvider) {
         return requestTemplate -> {
             String systemToken = systemTokenProvider.getToken();
+            log.info("systemToken: {}", systemToken);
             requestTemplate.header("Authorization", BEARER_TOKEN_PREFIX + systemToken);
         };
     }

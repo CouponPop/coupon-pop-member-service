@@ -108,6 +108,7 @@ public class AuthService {
         // FCM Token 만료 처리에 실패하더라도 로그아웃은 롤백하지 않음
         try {
             FcmTokenExpireRequest fcmTokenExpireRequest = FcmTokenExpireRequest.of(authMember.id(), logoutRequest.fcmToken());
+            log.info("fcmTokenExpireRequest: {}", fcmTokenExpireRequest);
             fcmTokenSystemFeignClient.expireFcmToken(fcmTokenExpireRequest);
         } catch (FeignException e) {
             log.error("[로그아웃] FCM 토큰 만료 처리 실패 - memberId={}, fcmToken={}", authMember.id(), logoutRequest.fcmToken(), e);
