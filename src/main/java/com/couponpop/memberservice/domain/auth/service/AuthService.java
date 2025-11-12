@@ -1,7 +1,7 @@
 package com.couponpop.memberservice.domain.auth.service;
 
 import com.couponpop.couponpopcoremodule.dto.fcmtoken.request.FcmTokenExpireRequest;
-import com.couponpop.memberservice.common.client.FcmTokenUserFeignClient;
+import com.couponpop.memberservice.common.client.FcmTokenSystemFeignClient;
 import com.couponpop.memberservice.common.exception.GlobalException;
 import com.couponpop.memberservice.domain.auth.dto.request.LoginRequest;
 import com.couponpop.memberservice.domain.auth.dto.request.LogoutRequest;
@@ -41,7 +41,7 @@ public class AuthService {
     private final TokenBlacklistService tokenBlacklistService;
     private final ApplicationEventPublisher eventPublisher;
 
-    private final FcmTokenUserFeignClient fcmTokenUserFeignClient;
+    private final FcmTokenSystemFeignClient fcmTokenSystemFeignClient;
 
     @Transactional
     public SignUpResponse signUp(SignUpRequest signUpRequest) {
@@ -98,7 +98,7 @@ public class AuthService {
     // 트랜잭션은 DB 작업(FcmToken 삭제)만 보장하며,
     // Redis 블랙리스트 작업은 별도 (분산 트랜잭션 고려하지 않음)
     @Transactional
-    public void logout(String authorizationHeader, LogoutRequest logoutRequest) {
+    public void logout(String authorizationHeader, AuthMember authMember, LogoutRequest logoutRequest) {
 
         String resolvedToken = extractToken(authorizationHeader);
         long expirationMillis = jwtProvider.getExpirationMillis(resolvedToken);
@@ -107,8 +107,8 @@ public class AuthService {
 
         // FCM Token 만료 처리에 실패하더라도 로그아웃은 롤백하지 않음
         try {
-            FcmTokenExpireRequest fcmTokenExpireRequest = FcmTokenExpireRequest.from(logoutRequest.fcmToken());
-            fcmTokenUserFeignClient.expireFcmToken(fcmTokenExpireRequest);
+            FcmTokenExpireRequest fcmTokenExpireRequest = FcmTokenExpireRequest.of(authMember.id(), logoutRequest.fcmToken());
+            fcmTokenSystemFeignClient.expireFcmToken(fcmTokenExpireRequest);
         } catch (FeignException e) {
             log.error("[로그아웃] FCM 토큰 만료 처리 실패 - fcmToken={}, error={}", logoutRequest.fcmToken(), e.getMessage());
         }
@@ -128,8 +128,8 @@ public class AuthService {
 
         // FCM Token 만료 처리에 실패하더라도 회원탈퇴는 롤백하지 않음
         try {
-            FcmTokenExpireRequest fcmTokenExpireRequest = FcmTokenExpireRequest.from(withdrawRequest.fcmToken());
-            fcmTokenUserFeignClient.expireFcmToken(fcmTokenExpireRequest);
+            FcmTokenExpireRequest fcmTokenExpireRequest = FcmTokenExpireRequest.of(authMember.id(), withdrawRequest.fcmToken());
+            fcmTokenSystemFeignClient.expireFcmToken(fcmTokenExpireRequest);
         } catch (FeignException e) {
             log.error("[회원탈퇴] FCM 토큰 만료 처리 실패 - fcmToken={}, error={}", withdrawRequest.fcmToken(), e.getMessage());
         }

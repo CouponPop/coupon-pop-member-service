@@ -1,7 +1,7 @@
 package com.couponpop.memberservice.domain.auth.service;
 
 import com.couponpop.couponpopcoremodule.dto.fcmtoken.request.FcmTokenExpireRequest;
-import com.couponpop.memberservice.common.client.FcmTokenUserFeignClient;
+import com.couponpop.memberservice.common.client.FcmTokenSystemFeignClient;
 import com.couponpop.memberservice.common.exception.GlobalException;
 import com.couponpop.memberservice.domain.auth.dto.request.LoginRequest;
 import com.couponpop.memberservice.domain.auth.dto.request.LogoutRequest;
@@ -57,7 +57,7 @@ class AuthServiceTest {
     private JwtProvider jwtProvider;
 
     @Mock
-    private FcmTokenUserFeignClient fcmTokenUserFeignClient;
+    private FcmTokenSystemFeignClient fcmTokenSystemFeignClient;
 
     @Mock
     private TokenBlacklistService tokenBlacklistService;
@@ -240,7 +240,7 @@ class AuthServiceTest {
             given(jwtProvider.getExpirationMillis(testToken)).willReturn(testExpirationMillis);
 
             // when
-            authService.logout(testAuthorizationHeader, testLogoutRequest);
+            authService.logout(testAuthorizationHeader, testAuthMember, testLogoutRequest);
 
             // then
             // 1. JWT 검증
@@ -250,7 +250,7 @@ class AuthServiceTest {
 
             // 2. 토큰 삭제 호출 검증
             ArgumentCaptor<FcmTokenExpireRequest> captor = ArgumentCaptor.forClass(FcmTokenExpireRequest.class);
-            verify(fcmTokenUserFeignClient).expireFcmToken(captor.capture());
+            verify(fcmTokenSystemFeignClient).expireFcmToken(captor.capture());
             assertThat(captor.getValue().fcmToken()).isEqualTo(testLogoutRequest.fcmToken());
         }
 
@@ -265,40 +265,12 @@ class AuthServiceTest {
 
             // when & then
             GlobalException exception = assertThrows(GlobalException.class, () -> {
-                authService.logout(testAuthorizationHeader, testLogoutRequest);
+                authService.logout(testAuthorizationHeader, testAuthMember, testLogoutRequest);
             });
 
             assertThat(exception.getErrorCode()).isEqualTo(AuthErrorCode.INVALID_TOKEN);
-            verify(fcmTokenUserFeignClient, never()).expireFcmToken(any());
+            verify(fcmTokenSystemFeignClient, never()).expireFcmToken(any());
         }
-
-        // TODO: 필요없을 것 같긴 한데 혹시 모르니 놔두겠습니다 확인해주세요!
-//        @Test
-//        @DisplayName("로그아웃 시 FCM 토큰이 없어도 로그아웃에 성공한다.")
-//        void logoutSuccessWithoutFcmToken() {
-//
-//            // given
-//            testLogoutRequest = new LogoutRequest("testFcmToken");
-//            MemberFcmToken mockFcmToken = TestUtils.createEntity(MemberFcmToken.class, Map.of("fcmToken", "testFcmToken"));
-//
-//            given(jwtProvider.resolveToken(testAuthorizationHeader)).willReturn(testToken);
-//            given(jwtProvider.getExpirationMillis(testToken)).willReturn(testExpirationMillis);
-//
-//            given(memberFcmTokenRepository.findByMemberIdAndFcmToken(testAuthMember.id(), testLogoutRequest.fcmToken()))
-//                    .willReturn(Optional.empty());
-//
-//            // when
-//            authService.logout(testAuthorizationHeader, testLogoutRequest, testAuthMember);
-//
-//            // then
-//            // 1. JWT 검증
-//            verify(jwtProvider).resolveToken(testAuthorizationHeader);
-//            verify(jwtProvider).getExpirationMillis(testToken);
-//            verify(tokenBlacklistService).blacklistToken(testToken, testExpirationMillis);
-//
-//            // 2. FCM Token 검증
-//            verify(memberFcmTokenRepository).findByMemberIdAndFcmToken(testAuthMember.id(), testLogoutRequest.fcmToken());
-//        }
     }
 
     @Nested
@@ -338,7 +310,7 @@ class AuthServiceTest {
 
             // FCM 토큰
             ArgumentCaptor<FcmTokenExpireRequest> captor = ArgumentCaptor.forClass(FcmTokenExpireRequest.class);
-            verify(fcmTokenUserFeignClient).expireFcmToken(captor.capture());
+            verify(fcmTokenSystemFeignClient).expireFcmToken(captor.capture());
             assertThat(captor.getValue().fcmToken()).isEqualTo(testWithdrawRequest.fcmToken());
 
             // JWT
@@ -364,7 +336,7 @@ class AuthServiceTest {
 
             assertThat(exception.getErrorCode()).isEqualTo(MemberErrorCode.MEMBER_NOT_FOUND);
 
-            verify(fcmTokenUserFeignClient, never()).expireFcmToken(any());
+            verify(fcmTokenSystemFeignClient, never()).expireFcmToken(any());
             verify(eventPublisher, never()).publishEvent(any());
         }
     }
