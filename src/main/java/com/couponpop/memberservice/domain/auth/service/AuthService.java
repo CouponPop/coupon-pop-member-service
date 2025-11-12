@@ -110,7 +110,7 @@ public class AuthService {
             FcmTokenExpireRequest fcmTokenExpireRequest = FcmTokenExpireRequest.of(authMember.id(), logoutRequest.fcmToken());
             fcmTokenSystemFeignClient.expireFcmToken(fcmTokenExpireRequest);
         } catch (FeignException e) {
-            log.error("[로그아웃] FCM 토큰 만료 처리 실패 - memberId={}, fcmToken={}, error={}", authMember.id(), logoutRequest.fcmToken(), e.getMessage());
+            log.error("[로그아웃] FCM 토큰 만료 처리 실패 - memberId={}, fcmToken={}", authMember.id(), logoutRequest.fcmToken(), e);
         }
     }
 
@@ -131,7 +131,7 @@ public class AuthService {
             FcmTokenExpireRequest fcmTokenExpireRequest = FcmTokenExpireRequest.of(authMember.id(), withdrawRequest.fcmToken());
             fcmTokenSystemFeignClient.expireFcmToken(fcmTokenExpireRequest);
         } catch (FeignException e) {
-            log.error("[회원탈퇴] FCM 토큰 만료 처리 실패 - memberId={}, fcmToken={}, error={}", authMember.id(), withdrawRequest.fcmToken(), e.getMessage());
+            log.error("[회원탈퇴] FCM 토큰 만료 처리 실패 - memberId={}, fcmToken={}", authMember.id(), withdrawRequest.fcmToken(), e);
         }
 
         publishBlacklistTokenEvent(resolvedToken, expirationMillis);
