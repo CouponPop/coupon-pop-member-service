@@ -288,7 +288,7 @@ class AuthControllerTest {
         LogoutRequest requestDto = new LogoutRequest("testFcmToken");
 
         // authService.logout()은 void를 반환
-        doNothing().when(authService).logout(anyString(), any(LogoutRequest.class));
+        doNothing().when(authService).logout(anyString(), any(AuthMember.class), any(LogoutRequest.class));
 
         // when
         ResultActions resultActions = mockMvc.perform(
