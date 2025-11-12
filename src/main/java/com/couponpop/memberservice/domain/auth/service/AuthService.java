@@ -103,8 +103,6 @@ public class AuthService {
         String resolvedToken = extractToken(authorizationHeader);
         long expirationMillis = jwtProvider.getExpirationMillis(resolvedToken);
 
-        blacklistToken(resolvedToken, expirationMillis);
-
         // FCM Token 만료 처리에 실패하더라도 로그아웃은 롤백하지 않음
         try {
             FcmTokenExpireRequest fcmTokenExpireRequest = FcmTokenExpireRequest.of(authMember.id(), logoutRequest.fcmToken());
@@ -113,6 +111,8 @@ public class AuthService {
         } catch (FeignException e) {
             log.error("[로그아웃] FCM 토큰 만료 처리 실패 - memberId={}, fcmToken={}", authMember.id(), logoutRequest.fcmToken(), e);
         }
+
+        blacklistToken(resolvedToken, expirationMillis);
     }
 
     // 회원 탈퇴가 되면 토큰만료 이벤트 발행, 회원탈퇴가 되지 않으면 롤백
@@ -125,8 +125,6 @@ public class AuthService {
         Member memberToWithdraw = memberRepository.findById(authMember.id())
                 .orElseThrow(() -> new GlobalException(MemberErrorCode.MEMBER_NOT_FOUND));
 
-        memberToWithdraw.withdraw();
-
         // FCM Token 만료 처리에 실패하더라도 회원탈퇴는 롤백하지 않음
         try {
             FcmTokenExpireRequest fcmTokenExpireRequest = FcmTokenExpireRequest.of(authMember.id(), withdrawRequest.fcmToken());
@@ -134,6 +132,8 @@ public class AuthService {
         } catch (FeignException e) {
             log.error("[회원탈퇴] FCM 토큰 만료 처리 실패 - memberId={}, fcmToken={}", authMember.id(), withdrawRequest.fcmToken(), e);
         }
+
+        memberToWithdraw.withdraw();
 
         publishBlacklistTokenEvent(resolvedToken, expirationMillis);
     }
