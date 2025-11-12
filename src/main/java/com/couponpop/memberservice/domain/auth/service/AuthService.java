@@ -12,6 +12,7 @@ import com.couponpop.memberservice.domain.auth.dto.response.SignUpResponse;
 import com.couponpop.memberservice.domain.auth.event.TokenBlacklistEvent;
 import com.couponpop.memberservice.domain.auth.exception.AuthErrorCode;
 import com.couponpop.memberservice.domain.member.entity.Member;
+import com.couponpop.memberservice.domain.member.enums.MemberType;
 import com.couponpop.memberservice.domain.member.exception.MemberErrorCode;
 import com.couponpop.memberservice.domain.member.repository.MemberRepository;
 import com.couponpop.security.blacklist.service.TokenBlacklistService;
@@ -44,6 +45,11 @@ public class AuthService {
 
     @Transactional
     public SignUpResponse signUp(SignUpRequest signUpRequest) {
+
+        // Admin MemberType은 내부에서만 가입하도록 API에서는 가입 금지
+        if (MemberType.ADMIN.equals(signUpRequest.memberType())) {
+            throw new GlobalException(AuthErrorCode.ACCESS_DENIED);
+        }
 
         if (!signUpRequest.password().equals(signUpRequest.confirmPassword())) {
             throw new GlobalException(AuthErrorCode.PASSWORDS_NOT_MATCH);

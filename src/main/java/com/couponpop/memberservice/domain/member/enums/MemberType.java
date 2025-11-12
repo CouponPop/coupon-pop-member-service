@@ -2,6 +2,7 @@ package com.couponpop.memberservice.domain.member.enums;
 
 public enum MemberType {
 
+    ADMIN,
     OWNER,
     CUSTOMER;
 
