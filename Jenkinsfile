@@ -337,14 +337,12 @@ pipeline {
 
     // 빌드 후 항상 실행
     post {
-        // 'success' 블록: 빌드가 성공했을 때만 리포트/아티팩트를 수집
-        success {
+        // 'always' 블록: 스테이지 실행 여부와 관계없이 항상 정리
+        always {
             archiveArtifacts artifacts: 'build/reports/jacoco/test/html/**', allowEmptyArchive: true, fingerprint: true
             archiveArtifacts artifacts: 'build/reports/tests/test/**', allowEmptyArchive: true, fingerprint: true
             junit allowEmptyResults: true, testResults: 'build/test-results/test/*.xml'
-        }
-        // 'always' 블록: 스테이지 실행 여부와 관계없이 항상 정리
-        always {
+
             sh 'rm -f src/main/resources/firebase/serviceAccountKey.json'
             cleanWs() // 워크스페이스 정리
         }

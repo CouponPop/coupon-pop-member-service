@@ -1,6 +1,6 @@
 # Dockerfile
 # ---------- [1단계] Build Stage ----------
-FROM gradle:8.7.0-jdk17-alpine AS builder
+FROM gradle:8.14.3-jdk17-alpine AS builder
 WORKDIR /app
 
 # GitHub Packages 인증값을 빌드 인자/환경변수로 주입 (builder 단계 한정)
