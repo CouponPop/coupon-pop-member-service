@@ -32,6 +32,12 @@ public class UserFeignConfig {
 
             HttpServletRequest request = attrs.getRequest();
             String authHeader = request.getHeader(HttpHeaders.AUTHORIZATION);
+
+            if (authHeader != null) {
+                log.info("authHeader: {}", authHeader);
+                return;
+            }
+
             if (StringUtils.hasText(authHeader) && authHeader.startsWith(SecurityTemplates.BEARER_TOKEN_PREFIX)) {
                 requestTemplate.header(HttpHeaders.AUTHORIZATION, authHeader);
             }

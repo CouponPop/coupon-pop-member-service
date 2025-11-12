@@ -5,6 +5,7 @@ import feign.RequestInterceptor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
 
 import static com.couponpop.security.constants.SecurityTemplates.BEARER_TOKEN_PREFIX;
 
@@ -26,6 +27,7 @@ public class SystemFeignConfig {
     public RequestInterceptor systemTokenRequestInterceptor(SystemTokenProvider systemTokenProvider) {
         return requestTemplate -> {
             String systemToken = systemTokenProvider.getToken();
+            requestTemplate.headers().remove(HttpHeaders.AUTHORIZATION);
             log.info("systemToken: {}", systemToken);
             requestTemplate.header("Authorization", BEARER_TOKEN_PREFIX + systemToken);
         };
