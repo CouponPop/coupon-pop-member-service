@@ -73,3 +73,8 @@ jwt:
       - /swagger-resources/**
       - /webjars/**
       - /docs/**
+
+logging:
+  level:
+    com.couponpop.memberservice: DEBUG
+    com.couponpop.security: DEBUG
