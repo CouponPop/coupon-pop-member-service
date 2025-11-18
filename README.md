@@ -72,7 +72,7 @@ CouponPop 마이크로서비스 아키텍처의 **회원 관리(Member)** 및 **
     * (권장) 프로젝트 루트의 `local-docker-infra` 내 `docker-compose.db.replica.yml` 및 `docker-compose.yml`을 활용하세요.
 
 3.  **(필수) `.env` 파일 생성**:
-    * 이 `member-service` 프로젝트 루트에 `.env` 파일을 생성하고, `build.gradle`과 `application-local.yml`이 참조할 변수들을 입력합니다.
+    * 이 `member-service` 프로젝트 루트에 `.env` 파일을 생성하고, `build.gradle`과 `application.yml`, `application-local.yml`이 참조할 변수들을 입력합니다.
 
     ```dotenv
     # build.gradle이 사용할 GitHub Packages 인증 정보
