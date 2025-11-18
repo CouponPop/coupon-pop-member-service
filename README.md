@@ -19,7 +19,8 @@ CouponPop 마이크로서비스 아키텍처의 **회원 관리(Member)** 및 **
 * **Database**: MySQL, Flyway, H2 (테스트용)
 * **CI/CD**: Jenkins, Docker, SonarQube, Jacoco
 * **Monitoring**: Micrometer (Prometheus)
-* **Dependencies**: `couponpop-core-module`, `couponpop-security-module`, Spring Cloud OpenFeign
+* **common module**: `couponpop-core-module`, `couponpop-security-module`
+* **Internal Service Client**: Spring Cloud OpenFeign
 
 ## 3. API 엔드포인트
 
@@ -33,7 +34,7 @@ CouponPop 마이크로서비스 아키텍처의 **회원 관리(Member)** 및 **
 * `GET /me`: 내 프로필 조회
 * `PUT /me`: 내 프로필 수정 (사용자 이름, 비밀번호, 전화번호)
 
-## 4. 의존성
+## 4. 외부 마이크로서비스 및 리소스
 
 * **[Downstream Services]**
     * `notification-service`: 로그아웃/회원탈퇴 시 FCM 토큰 만료를 요청합니다.
@@ -41,7 +42,7 @@ CouponPop 마이크로서비스 아키텍처의 **회원 관리(Member)** 및 **
     * `MySQL (Master/Slave)`: 회원 정보 저장 및 조회
     * `Redis`: `couponpop-security-module`을 통해 JWT 블랙리스트 관리에 사용됩니다.
 
-## 5. 환경 변수
+## 5. 환경 변수 및 설정
 
 이 서비스를 실행하기 위해 필요한 환경 변수 목록입니다. (`.env.example` 참고)
 
