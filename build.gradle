@@ -1,12 +1,83 @@
+buildscript {
+    dependencies {
+        classpath 'org.flywaydb:flyway-mysql:11.14.0'
+    }
+}
+
 plugins {
     id 'java'
-    id 'org.springframework.boot' version '3.5.7'
+    id 'org.springframework.boot' version '3.4.10' // 기존 API 서버와 동일하게 변경
     id 'io.spring.dependency-management' version '1.1.7'
+    id 'org.flywaydb.flyway' version '11.14.0'
+    id "org.sonarqube" version '7.0.1.6134'
+    id 'jacoco'
 }
+
+flyway {
+    configFiles = ["$rootDir/conf/flyway.conf"]
+    locations = ['filesystem:src/main/resources/db/migration']
+    baselineOnMigrate = true
+    baselineVersion = 1
+    cleanDisabled = true
+}
+
+jacoco {
+    toolVersion = "0.8.14"
+}
+
+def loadGithubCredentials() {
+    def credentials = [:]
+    def envFile = file('.env')
+    def foundKeys = 0
+
+    if (envFile.exists()) {
+        envFile.eachLine { line ->
+            if (foundKeys == 2) return // 두 키 다 찾으면 조기 종료
+            if (!line.startsWith('#') && line.contains('=')) {
+                def (key, value) = line.split('=', 2)*.trim()
+                if (key in ['GITHUB_ACTOR', 'GITHUB_TOKEN']) {
+                    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+                        value = value.substring(1, value.length() - 1)
+                    }
+                    credentials[key] = value
+                    foundKeys++ //
+                }
+            }
+        }
+    }
+
+    return credentials
+}
+
+def jacocoExcludes = [
+        // --- Spring Boot/JPA 관련 ---
+        '**/configuration/**',
+        '**/config/**',
+        '**/dto/**',
+        '**/exception/**',
+        '**/error/**',
+        '**/filter/**',
+        '**/handler/**',
+        '**/security/**',
+        '**/util/**',
+
+        // --- QueryDSL 관련 ---
+        '**/Q*.class',
+
+        // --- 기타 생성 코드 ---
+        '**/*Application.class',
+        '**/Test*.class',
+
+        // --- Flyway 관련 ---
+        '**/db/migration/**',
+
+        // --- Swagger 관련 ---
+        '**/static/docs/**',
+]
 
 group = 'com.couponpop'
 version = '0.0.1-SNAPSHOT'
-description = 'couponpop-member'
+description = 'Member Service for CouponPop MSA'
 
 java {
     toolchain {
@@ -22,26 +93,94 @@ configurations {
 
 repositories {
     mavenCentral()
+    maven {
+        url = uri("https://maven.pkg.github.com/CouponPop/couponpop-security-module")
+        url = uri("https://maven.pkg.github.com/CouponPop/couponpop-core-module")
+        credentials {
+            def githubCredentials = loadGithubCredentials()
+            username = System.getenv("GITHUB_ACTOR") ?: githubCredentials.GITHUB_ACTOR ?: "unknown"
+            password = System.getenv("GITHUB_TOKEN") ?: githubCredentials.GITHUB_TOKEN ?: "unknown"
+        }
+    }
+}
+
+dependencyManagement {
+    imports {
+        mavenBom "io.awspring.cloud:spring-cloud-aws-dependencies:3.1.1"
+        mavenBom "org.springframework.cloud:spring-cloud-dependencies:2024.0.0"
+    }
 }
 
 dependencies {
+
+    // [Spring Boot Starter]
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-web'
-    compileOnly 'org.projectlombok:lombok'
-    developmentOnly 'org.springframework.boot:spring-boot-devtools'
-    runtimeOnly 'com.h2database:h2'
+
+    // [CouponPop Security Module]
+    implementation 'com.couponpop:couponpop-security:0.0.4-SNAPSHOT'
+
+    // [CouponPop Core Module]
+    implementation 'com.couponpop:couponpop-core:0.0.21-SNAPSHOT'
+
+    // [DB]
     runtimeOnly 'com.mysql:mysql-connector-j'
+    runtimeOnly 'com.h2database:h2'
+
+    // [Flyway]
+    implementation 'org.flywaydb:flyway-core'
+    implementation 'org.flywaydb:flyway-mysql'
+
+    // [Rest Docs]
+    testImplementation 'org.springframework.restdocs:spring-restdocs-mockmvc'
+
+    // [AWS]
+    implementation 'io.awspring.cloud:spring-cloud-aws-starter-parameter-store'
+
+    // [OpenFeign]
+    implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
+
+    developmentOnly 'org.springframework.boot:spring-boot-devtools'
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+
+    compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
+    testCompileOnly 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    testImplementation 'org.testcontainers:testcontainers'
+    testImplementation 'org.testcontainers:junit-jupiter'
+
+    // [Micrometer Prometheus Registry]
+    implementation 'io.micrometer:micrometer-registry-prometheus'
 }
 
 tasks.named('test') {
     useJUnitPlatform()
+    finalizedBy jacocoTestReport
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true // SonarQube용
+        csv.required = false
+        html.required = true // 개발자 확인용
+        html.outputLocation = layout.buildDirectory.dir('reports/jacoco/test/html')
+    }
+    afterEvaluate {
+        classDirectories.setFrom(
+                files(classDirectories.files.collect {
+                    fileTree(dir: it, exclude: jacocoExcludes)
+                })
+        )
+    }
 }
